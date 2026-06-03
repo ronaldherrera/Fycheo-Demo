@@ -4,6 +4,21 @@ import { Mail, ArrowRight, Loader2, ShieldCheck, Lock } from 'lucide-react';
 
 const STORAGE_KEY = 'fycheo_demo_access';
 
+function detectDevice(): string {
+  const ua = navigator.userAgent;
+  if (/iPad|Android(?!.*Mobile)|Tablet/i.test(ua)) return 'tablet';
+  if (/Mobi|Android|iPhone/i.test(ua)) return 'mobile';
+  return 'desktop';
+}
+
+async function trackVisit(email: string) {
+  await supabase.from('demo_visits').insert({
+    email,
+    device_type: detectDevice(),
+    user_agent:  navigator.userAgent.slice(0, 250),
+  });
+}
+
 interface Props {
   children: React.ReactNode;
 }
@@ -23,7 +38,12 @@ export default function DemoGate({ children }: Props) {
         .eq('email', saved)
         .maybeSingle()
         .then(({ data }) => {
-          setStatus(data ? 'granted' : 'gate');
+          if (data) {
+            trackVisit(saved);
+            setStatus('granted');
+          } else {
+            setStatus('gate');
+          }
         });
     } else {
       setStatus('gate');
@@ -44,7 +64,9 @@ export default function DemoGate({ children }: Props) {
       .maybeSingle();
 
     if (data) {
-      localStorage.setItem(STORAGE_KEY, email.trim().toLowerCase());
+      const cleanEmail = email.trim().toLowerCase();
+      localStorage.setItem(STORAGE_KEY, cleanEmail);
+      trackVisit(cleanEmail);
       setStatus('granted');
     } else {
       setError('Este email no tiene acceso a la demo. Contacta con el equipo de Fycheo.');

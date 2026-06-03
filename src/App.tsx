@@ -5,7 +5,10 @@ import DemoGate from './demo/DemoGate';
 import ManagerRouter from './manager/ManagerRouter';
 import KioskRouter from './kiosk/KioskRouter';
 import EmployeeApp from './employee/EmployeeApp';
+import AdminPanel from './admin/AdminPanel';
 import { Monitor } from 'lucide-react';
+
+const ADMIN_PATH = '/fyadmin';
 
 const DESKTOP_BREAKPOINT = 1024;
 
@@ -38,9 +41,11 @@ function App() {
     return () => mq.removeEventListener('change', handler);
   }, []);
 
-  if (isMobile) return <MobileBlock />;
-
   const path = typeof window !== 'undefined' ? window.location.pathname : '/';
+
+  if (path === ADMIN_PATH) return <AdminPanel />;
+
+  if (isMobile) return <MobileBlock />;
 
   // EmployeeApp tiene su propio MemoryRouter — renderizarlo fuera del BrowserRouter
   if (path.startsWith('/employee')) {

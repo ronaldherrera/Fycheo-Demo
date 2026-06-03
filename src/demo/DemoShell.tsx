@@ -7,6 +7,12 @@ import {
 } from 'lucide-react';
 
 const DEMO_COMPANY_ID  = import.meta.env.VITE_DEMO_COMPANY_ID || '';
+
+function trackSection(sectionId: string) {
+  const email = localStorage.getItem('fycheo_demo_access');
+  if (!email) return;
+  supabase.from('demo_events').insert({ email, section: sectionId });
+}
 const ADMIN_EMAIL      = import.meta.env.VITE_DEMO_ADMIN_EMAIL    || 'demo.admin@fycheo-demo.com';
 const ADMIN_PASS       = import.meta.env.VITE_DEMO_ADMIN_PASSWORD || 'FycheoDemo2024!';
 const EMPLOYEE_EMAIL   = 'empleado.demo@fycheo-demo.com';
@@ -202,6 +208,7 @@ export default function DemoShell() {
         }
 
         setReady(true);
+        trackSection(isFullscreen ? fsSection : 'manager');
       } catch (e) {
         console.error('Demo boot error:', e);
       } finally {
@@ -249,6 +256,7 @@ export default function DemoShell() {
     }
     setActive(id);
     setIframeKey(k => k + 1);
+    trackSection(id);
   };
 
   useEffect(() => {
