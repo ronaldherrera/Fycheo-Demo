@@ -38,7 +38,7 @@ type TimeEntry = {
   description: string | null;
   minutes?: number | null;
   created_at: string;
-  companies?: { name: string }[] | { name: string } | null;
+  companies?: { name: string }[] | null;
   status?: string | null;
 };
 
@@ -2144,9 +2144,9 @@ const DashboardScreen: React.FC = () => {
                         <p className="font-bold text-slate-800 dark:text-slate-100 text-sm">
                           {displayLabel}
                         </p>
-                        {e.companies?.name && (
+                        {e.companies?.[0]?.name && (
                           <span className="text-[9px] font-bold bg-indigo-500/10 text-indigo-500 dark:text-indigo-400 dark:bg-indigo-500/20 px-1.5 py-0.5 rounded-md leading-none">
-                            {e.companies.name}
+                            {e.companies[0].name}
                           </span>
                         )}
                       </div>
