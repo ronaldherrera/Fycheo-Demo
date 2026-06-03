@@ -31,17 +31,15 @@ type EntryType =
 type TimeEntry = {
   id: string;
   user_id: string;
-  // Nuevo: fecha/hora REAL del evento (la que el usuario marca)
-  occurred_at: string | null; // timestamptz ISO
-
-  // Legacy (para compatibilidad si ya existían registros)
+  occurred_at: string | null;
   date?: string | null;
   entry_time?: string | null;
   entry_type: EntryType | string | null;
   description: string | null;
-  minutes?: number | null; // ya no lo usamos
-
+  minutes?: number | null;
   created_at: string;
+  companies?: { name: string } | null;
+  status?: string | null;
 };
 
 const pad2 = (n: number) => String(n).padStart(2, "0");

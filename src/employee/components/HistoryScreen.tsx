@@ -105,7 +105,7 @@ const HistoryScreen: React.FC = () => {
   const [canDelete, setCanDelete] = useState(false); // Restricción de borrado: solo el último global
 
   // Constraints for editing
-  const [editConstraints, setEditConstraints] = useState<{min: string | null, max: string | null, minTime?: Date, maxTime?: Date} | null>(null);
+  const [editConstraints, setEditConstraints] = useState<{min: string | null, max: string | null, minTime?: Date, maxTime?: Date, minType?: string, maxType?: string} | null>(null);
   const [latestGlobalId, setLatestGlobalId] = useState<string | null>(null); // ID of the absolute latest record
   
   // Custom Error Modal State
