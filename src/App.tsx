@@ -32,14 +32,16 @@ function MobileBlock() {
 }
 
 function App() {
-  const [isMobile, setIsMobile] = useState(() => window.innerWidth < DESKTOP_BREAKPOINT);
+  const inIframe = window.self !== window.top;
+  const [isMobile, setIsMobile] = useState(() => !inIframe && window.innerWidth < DESKTOP_BREAKPOINT);
 
   useEffect(() => {
+    if (inIframe) return;
     const mq = window.matchMedia(`(max-width: ${DESKTOP_BREAKPOINT - 1}px)`);
     const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
     mq.addEventListener('change', handler);
     return () => mq.removeEventListener('change', handler);
-  }, []);
+  }, [inIframe]);
 
   const path = typeof window !== 'undefined' ? window.location.pathname : '/';
 
