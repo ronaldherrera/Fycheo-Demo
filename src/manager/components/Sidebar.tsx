@@ -156,7 +156,6 @@ const Sidebar = ({ isOpen = true, setIsOpen, isMobile = false }: SidebarProps) =
     { icon: CalendarOff, label: 'Ausencias y Bajas', path: '/manager/ausencias', badge: pendingAbsences },
     { icon: FolderOpen, label: 'Documentación', group: true, children: docChildren },
     ...(canViewSettings() ? [{ icon: Activity, label: 'Registro Actividad', path: '/manager/auditoria' }] : []),
-    { icon: User, label: 'Mi Cuenta', path: '/manager/account' },
     ...(canViewSettings() ? [{ icon: Settings, label: 'Configuración', path: '/manager/configuracion' }] : []),
   ];
 
@@ -213,7 +212,7 @@ const Sidebar = ({ isOpen = true, setIsOpen, isMobile = false }: SidebarProps) =
         )}
 
         <nav className="flex-1 py-6 px-3 space-y-1 overflow-y-auto">
-            {navItems.filter(item => item.group || item.path !== '/account').map((item) => {
+            {navItems.filter(item => item.group || item.path !== '/manager/account').map((item) => {
               if (item.group) {
                 const isChildActive = item.children.some((c: any) => location.pathname === c.path);
                 return (

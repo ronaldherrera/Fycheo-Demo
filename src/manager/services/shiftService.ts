@@ -1,3 +1,4 @@
+import { adjustDateString } from '../../lib/date-adjuster';
 import { supabase } from './supabase';
 import type { Shift } from '../types';
 
@@ -18,7 +19,7 @@ export const shiftService = {
       throw error;
     }
 
-    return (data || []) as Shift[];
+    return (data || []).map(s => ({ ...s, date: adjustDateString(s.date) })) as Shift[];
   },
 
   /**

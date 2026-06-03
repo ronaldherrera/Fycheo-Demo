@@ -701,7 +701,7 @@ const Teams = () => {
                                 </summary>
                                 <div className="flex flex-wrap gap-3 mt-2 pl-6">
                                   {teamManagers.map(mgr => (
-                                    <Link key={mgr.id} to={`/equipos/trabajador/${mgr.id}`} className="flex items-center gap-2 bg-primary/10 border border-primary/20 px-3 py-1.5 rounded-lg w-fit hover:bg-primary/20 hover:border-primary/40 transition-all">
+                                    <Link key={mgr.id} to={`/manager/equipos/trabajador/${mgr.id}`} className="flex items-center gap-2 bg-primary/10 border border-primary/20 px-3 py-1.5 rounded-lg w-fit hover:bg-primary/20 hover:border-primary/40 transition-all">
                                       <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-primary text-xs font-bold overflow-hidden border border-primary/30 shrink-0">
                                           {mgr.avatar ? (
                                               <img src={mgr.avatar} alt={mgr.name} className="w-full h-full object-cover" />
@@ -740,7 +740,7 @@ const Teams = () => {
                                       draggable={isAdminOrHr}
                                       onDragStart={(e) => handleDragStart(e, emp.id)}
                                     >
-                                      <Link to={`/equipos/trabajador/${emp.id}`} className="flex items-center gap-3 flex-1 cursor-pointer min-w-0">
+                                      <Link to={`/manager/equipos/trabajador/${emp.id}`} className="flex items-center gap-3 flex-1 cursor-pointer min-w-0">
                                         <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-slate-400 text-sm font-bold overflow-hidden border border-white/10 shrink-0">
                                            {emp.avatar ? (
                                                <img src={emp.avatar} alt={emp.name} className="w-full h-full object-cover" />
@@ -984,7 +984,7 @@ const Teams = () => {
                         className="flex flex-col p-4 rounded-xl bg-[#151B2B] border border-white/5 hover:border-white/10 transition-colors group/emp"
                       >
                         <div className="flex items-start justify-between gap-3 mb-3">
-                          <Link to={`/equipos/trabajador/${emp.id}`} className="flex items-center gap-3 min-w-0 group-hover/emp:opacity-80 transition-opacity flex-1">
+                          <Link to={`/manager/equipos/trabajador/${emp.id}`} className="flex items-center gap-3 min-w-0 group-hover/emp:opacity-80 transition-opacity flex-1">
                             <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-slate-400 text-sm font-bold overflow-hidden border border-white/10 shrink-0">
                                 {emp.avatar ? (
                                     <img src={emp.avatar} alt={emp.name} className="w-full h-full object-cover" />

@@ -1,19 +1,11 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { LayoutDashboard, Monitor, Smartphone, ArrowRight, Loader2, Building2, Users, Clock, Calendar } from 'lucide-react';
+import { Loader2, ArrowRight, Building2, Users, Clock, CalendarOff, BarChart2, Monitor, Smartphone } from 'lucide-react';
 
-const DEMO_COMPANY_NAME = 'Distribuciones Martínez S.A.';
-
-// Credenciales de las cuentas demo (deben existir en el proyecto Supabase demo)
 const DEMO_ACCOUNTS = {
   admin: {
     email: import.meta.env.VITE_DEMO_ADMIN_EMAIL || 'demo.admin@fycheo-demo.com',
     password: import.meta.env.VITE_DEMO_ADMIN_PASSWORD || 'FycheoDemo2024!',
-  },
-  manager: {
-    email: import.meta.env.VITE_DEMO_MANAGER_EMAIL || 'demo.manager@fycheo-demo.com',
-    password: import.meta.env.VITE_DEMO_MANAGER_PASSWORD || 'FycheoDemo2024!',
   },
   kiosk: {
     email: import.meta.env.VITE_DEMO_ADMIN_EMAIL || 'demo.admin@fycheo-demo.com',
@@ -23,226 +15,246 @@ const DEMO_ACCOUNTS = {
 
 const DEMO_COMPANY_ID = import.meta.env.VITE_DEMO_COMPANY_ID || '';
 
-interface AppCard {
-  id: 'manager' | 'kiosk';
-  icon: React.ElementType;
-  title: string;
-  subtitle: string;
-  description: string;
-  role: string;
-  features: string[];
-  color: string;
-  gradient: string;
-  account: keyof typeof DEMO_ACCOUNTS;
-}
-
-const APP_CARDS: AppCard[] = [
-  {
-    id: 'manager',
-    icon: LayoutDashboard,
-    title: 'Panel de Manager',
-    subtitle: 'Vista de administración',
-    description: 'Dashboard completo con escaleta diaria, gestión de empleados, turnos, ausencias y exportación de reportes.',
-    role: 'Administrador',
-    features: ['Dashboard en tiempo real', 'Gestión de turnos y horarios', 'Control de ausencias y bajas', 'Exportación de reportes'],
-    color: 'text-blue-400',
-    gradient: 'from-blue-600/20 to-indigo-600/20',
-    account: 'admin',
-  },
-  {
-    id: 'kiosk',
-    icon: Monitor,
-    title: 'Kiosko de Fichaje',
-    subtitle: 'Terminal de empleados',
-    description: 'Terminal táctil para que los empleados registren entradas, salidas, descansos y soliciten permisos.',
-    role: 'Terminal compartido',
-    features: ['Fichaje por DNI', 'Entrada / Salida / Descanso', 'Solicitud de ausencias', 'Historial mensual'],
-    color: 'text-emerald-400',
-    gradient: 'from-emerald-600/20 to-teal-600/20',
-    account: 'kiosk',
-  },
-];
-
 export default function DemoHome() {
-  const navigate = useNavigate();
-  const [loadingCard, setLoadingCard] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState<'manager' | 'kiosk' | null>(null);
+  const [error, setError] = useState('');
 
-  const handleEnter = async (card: AppCard) => {
-    setLoadingCard(card.id);
-    setError(null);
+  const fetchCompanyId = async (userId: string) => {
+    const { data } = await supabase.from('companies').select('id').eq('owner_id', userId).limit(1).maybeSingle();
+    return data?.id || null;
+  };
 
+  const handleEnter = async (type: 'manager' | 'kiosk') => {
+    setLoading(type);
+    setError('');
     try {
-      // Cerrar sesión previa si la hay
       await supabase.auth.signOut();
-
-      // Login con la cuenta demo correspondiente
-      const { data, error: loginError } = await supabase.auth.signInWithPassword({
-        email: DEMO_ACCOUNTS[card.account].email,
-        password: DEMO_ACCOUNTS[card.account].password,
-      });
-
+      const account = type === 'manager' ? DEMO_ACCOUNTS.admin : DEMO_ACCOUNTS.kiosk;
+      const { data, error: loginError } = await supabase.auth.signInWithPassword(account);
       if (loginError) throw loginError;
       if (!data.user) throw new Error('No se pudo autenticar');
 
-      if (card.id === 'manager') {
-        // Configurar empresa activa
-        const companyId = DEMO_COMPANY_ID || await fetchDemoCompanyId(data.user.id);
-        if (companyId) {
-          localStorage.setItem('active_company_id', companyId);
-        }
-        navigate('/manager');
-      } else if (card.id === 'kiosk') {
-        const companyId = DEMO_COMPANY_ID || await fetchDemoCompanyId(data.user.id);
+      const companyId = DEMO_COMPANY_ID || await fetchCompanyId(data.user.id);
+
+      if (type === 'manager') {
+        if (companyId) localStorage.setItem('active_company_id', companyId);
+        window.open('/manager', '_blank');
+      } else {
         if (companyId) {
           localStorage.setItem('kiosk_demo_company_id', companyId);
           localStorage.setItem('kiosk_pin', '1234');
           localStorage.setItem('kiosk_device_id', 'demo-device-001');
         }
-        navigate('/kiosk');
+        window.open('/kiosk', '_blank');
       }
     } catch (err: any) {
-      console.error('Error entering demo:', err);
-      setError(err.message || 'Error al iniciar la demo. Revisa las credenciales en .env');
+      setError(err.message || 'Error al iniciar la demo');
     } finally {
-      setLoadingCard(null);
+      setLoading(null);
     }
   };
 
-  const fetchDemoCompanyId = async (userId: string): Promise<string | null> => {
-    const { data } = await supabase
-      .from('companies')
-      .select('id')
-      .eq('owner_id', userId)
-      .limit(1)
-      .maybeSingle();
-    return data?.id || null;
-  };
-
   return (
-    <div className="min-h-screen bg-background-dark flex flex-col items-center justify-center p-6 relative overflow-hidden">
+    <div className="min-h-screen bg-[#080C14] text-white overflow-x-hidden">
 
-      {/* Background Effects */}
-      <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-primary/8 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none" />
-      <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-purple-600/8 rounded-full blur-3xl translate-y-1/3 -translate-x-1/3 pointer-events-none" />
-
-      {/* Demo Banner */}
-      <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs px-4 py-1.5 rounded-full flex items-center gap-2 z-10">
-        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-        Entorno de Demostración — {DEMO_COMPANY_NAME}
-      </div>
-
-      <div className="max-w-5xl w-full relative z-10">
-
-        {/* Header */}
-        <div className="text-center mb-12 animate-fadeInUp">
-          <div className="inline-flex items-center gap-2.5 bg-surface-dark border border-white/5 rounded-2xl px-5 py-2.5 mb-6">
-            <Building2 size={16} className="text-primary" />
-            <span className="text-sm font-medium text-slate-300">{DEMO_COMPANY_NAME}</span>
+      {/* ── NAV ── */}
+      <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-8 h-16 border-b border-white/5 bg-[#080C14]/80 backdrop-blur-xl">
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center text-white font-bold text-sm">F</div>
+          <span className="font-bold text-lg tracking-tight">Fycheo</span>
+          <span className="text-[10px] font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full ml-1">DEMO</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 text-xs text-slate-400 bg-white/5 border border-white/8 px-3 py-1.5 rounded-full">
+            <Building2 size={12} />
+            Distribuciones Martínez S.A.
           </div>
-          <h1 className="text-5xl font-bold mb-4">
+        </div>
+      </nav>
+
+      {/* ── HERO ── */}
+      <section className="pt-28 pb-12 px-6 text-center relative">
+        {/* Glow */}
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 w-[700px] h-[400px] bg-primary/10 rounded-full blur-[120px] pointer-events-none" />
+
+        <div className="relative z-10 max-w-3xl mx-auto">
+          <p className="text-xs font-semibold tracking-widest text-primary uppercase mb-5">Entorno interactivo</p>
+          <h1 className="text-5xl md:text-6xl font-extrabold leading-tight mb-6 tracking-tight">
+            Prueba Fycheo<br />
             <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400">
-              Fycheo Demo
+              sin compromiso
             </span>
           </h1>
-          <p className="text-slate-400 text-lg max-w-lg mx-auto">
-            Explora todas las funcionalidades de Fycheo con datos reales de una empresa ficticia con un año de historial.
+          <p className="text-slate-400 text-lg max-w-xl mx-auto leading-relaxed mb-10">
+            Explora el sistema completo de control horario con datos reales de una empresa con un año de historial. Ningún dato es real.
           </p>
+
+          {/* Stats */}
+          <div className="flex items-center justify-center gap-6 flex-wrap text-sm text-slate-400">
+            {[
+              { icon: Users,      label: '24 empleados ficticios' },
+              { icon: Clock,      label: '12 meses de historial' },
+              { icon: CalendarOff,label: 'Ausencias y bajas reales' },
+              { icon: BarChart2,  label: 'Dashboard en vivo' },
+            ].map((s, i) => (
+              <div key={i} className="flex items-center gap-1.5">
+                <s.icon size={14} className="text-primary/70" />
+                {s.label}
+              </div>
+            ))}
+          </div>
         </div>
+      </section>
 
-        {/* Stats row */}
-        <div className="grid grid-cols-3 gap-4 mb-10 max-w-xl mx-auto">
-          {[
-            { icon: Users, label: '24 empleados', color: 'text-blue-400' },
-            { icon: Clock, label: '12 meses de datos', color: 'text-emerald-400' },
-            { icon: Calendar, label: '4 equipos activos', color: 'text-purple-400' },
-          ].map((stat, i) => (
-            <div key={i} className="bg-surface-dark border border-white/5 rounded-2xl p-4 text-center">
-              <stat.icon size={20} className={`${stat.color} mx-auto mb-2`} />
-              <span className="text-xs text-slate-400">{stat.label}</span>
-            </div>
-          ))}
-        </div>
+      {/* ── CARDS ── */}
+      <section className="pb-32 px-6">
+        <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6">
 
-        {/* App Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          {APP_CARDS.map((card) => (
-            <div
-              key={card.id}
-              className={`bg-surface-dark border border-white/5 rounded-3xl p-8 hover:border-white/10 transition-all duration-300 group cursor-pointer relative overflow-hidden`}
-              onClick={() => !loadingCard && handleEnter(card)}
-            >
-              {/* Background gradient */}
-              <div className={`absolute inset-0 bg-gradient-to-br ${card.gradient} opacity-0 group-hover:opacity-100 transition-opacity duration-300`} />
+          {/* Manager card */}
+          <div className="group relative bg-gradient-to-br from-[#0f1729] to-[#111827] border border-white/8 rounded-3xl overflow-hidden hover:border-primary/30 transition-all duration-500 hover:shadow-[0_0_60px_-15px_rgba(19,91,236,0.3)]">
 
-              <div className="relative z-10">
-                <div className={`w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300`}>
-                  <card.icon size={28} className={card.color} />
+            {/* Browser mockup */}
+            <div className="mx-5 mt-5 rounded-xl overflow-hidden border border-white/10 bg-[#0B0E14] shadow-xl">
+              {/* Browser bar */}
+              <div className="flex items-center gap-1.5 px-3 py-2.5 bg-[#151B2B] border-b border-white/5">
+                <div className="w-2.5 h-2.5 rounded-full bg-red-500/60" />
+                <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/60" />
+                <div className="w-2.5 h-2.5 rounded-full bg-green-500/60" />
+                <div className="flex-1 mx-3 bg-white/5 rounded-md px-3 py-1 text-[10px] text-slate-500">
+                  demo.fycheo.es/manager
                 </div>
-
-                <div className="mb-2 flex items-center gap-2">
-                  <h2 className="text-xl font-bold text-white">{card.title}</h2>
-                  <span className="text-[10px] font-medium bg-white/5 border border-white/10 text-slate-400 px-2 py-0.5 rounded-full">
-                    {card.role}
-                  </span>
+              </div>
+              {/* Preview */}
+              <div className="h-44 bg-[#0B0E14] flex overflow-hidden">
+                {/* Sidebar mini */}
+                <div className="w-12 bg-[#151B2B] border-r border-white/5 flex flex-col items-center py-3 gap-3">
+                  <div className="w-6 h-6 rounded-md bg-primary/20" />
+                  {[...Array(5)].map((_, i) => <div key={i} className="w-5 h-1.5 rounded bg-white/10" />)}
                 </div>
-                <p className="text-slate-400 text-sm mb-6 leading-relaxed">{card.description}</p>
-
-                <ul className="space-y-2 mb-8">
-                  {card.features.map((f, i) => (
-                    <li key={i} className="flex items-center gap-2 text-sm text-slate-400">
-                      <span className={`w-1.5 h-1.5 rounded-full ${card.color.replace('text-', 'bg-')}`} />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-
-                <button
-                  className={`w-full flex items-center justify-center gap-2 py-3 px-5 rounded-xl font-semibold text-sm transition-all duration-200 ${
-                    loadingCard === card.id
-                      ? 'bg-white/5 text-slate-400 cursor-wait'
-                      : `bg-primary hover:bg-primary-light text-white shadow-glow`
-                  }`}
-                  disabled={!!loadingCard}
-                >
-                  {loadingCard === card.id ? (
-                    <>
-                      <Loader2 size={16} className="animate-spin" />
-                      Entrando...
-                    </>
-                  ) : (
-                    <>
-                      Acceder como {card.subtitle}
-                      <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
-                    </>
-                  )}
-                </button>
+                {/* Content mini */}
+                <div className="flex-1 p-3 space-y-2">
+                  <div className="grid grid-cols-3 gap-2">
+                    {['bg-blue-500/20','bg-emerald-500/20','bg-purple-500/20'].map((c,i) => (
+                      <div key={i} className={`h-10 rounded-lg ${c} border border-white/5`} />
+                    ))}
+                  </div>
+                  <div className="h-16 rounded-lg bg-white/5 border border-white/5" />
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="h-8 rounded-lg bg-white/5 border border-white/5" />
+                    <div className="h-8 rounded-lg bg-white/5 border border-white/5" />
+                  </div>
+                </div>
               </div>
             </div>
-          ))}
-        </div>
 
-        {/* Employee app card (smaller) */}
-        <div className="bg-surface-dark border border-white/5 rounded-2xl p-5 flex items-center gap-4 hover:border-white/10 transition-all">
-          <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
-            <Smartphone size={20} className="text-violet-400" />
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+                  <Monitor size={20} className="text-primary" />
+                </div>
+                <div>
+                  <h2 className="font-bold text-white text-lg leading-tight">Panel Manager</h2>
+                  <p className="text-xs text-slate-500">Escritorio · Dashboard completo</p>
+                </div>
+              </div>
+              <p className="text-slate-400 text-sm mb-5 leading-relaxed">
+                Dashboard en tiempo real, gestión de empleados, planificación de turnos, control de ausencias y exportación de reportes.
+              </p>
+              <div className="flex flex-wrap gap-2 mb-6">
+                {['Escaleta diaria','Equipos','Turnos','Ausencias','Exportación PDF'].map(f => (
+                  <span key={f} className="text-[11px] bg-white/5 border border-white/8 text-slate-400 px-2.5 py-1 rounded-lg">{f}</span>
+                ))}
+              </div>
+              <button
+                onClick={() => handleEnter('manager')}
+                disabled={!!loading}
+                className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary-light disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-colors"
+              >
+                {loading === 'manager'
+                  ? <><Loader2 size={16} className="animate-spin" /> Abriendo...</>
+                  : <>Abrir Panel Manager <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" /></>
+                }
+              </button>
+            </div>
           </div>
-          <div className="flex-1 min-w-0">
-            <h3 className="text-sm font-semibold text-white">App de Empleado (PWA)</h3>
-            <p className="text-xs text-slate-500">La app móvil para empleados usa las mismas credenciales de Supabase. Accede desde el móvil con la URL del kiosko.</p>
+
+          {/* Kiosk card */}
+          <div className="group relative bg-gradient-to-br from-[#0a1a13] to-[#0f1a14] border border-white/8 rounded-3xl overflow-hidden hover:border-emerald-500/30 transition-all duration-500 hover:shadow-[0_0_60px_-15px_rgba(16,185,129,0.2)]">
+
+            {/* Tablet mockup */}
+            <div className="mx-5 mt-5 rounded-xl overflow-hidden border border-white/10 bg-[#0B1210] shadow-xl">
+              <div className="flex items-center gap-1.5 px-3 py-2.5 bg-[#0f1f18] border-b border-white/5">
+                <div className="w-2.5 h-2.5 rounded-full bg-red-500/60" />
+                <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/60" />
+                <div className="w-2.5 h-2.5 rounded-full bg-green-500/60" />
+                <div className="flex-1 mx-3 bg-white/5 rounded-md px-3 py-1 text-[10px] text-slate-500">
+                  demo.fycheo.es/kiosk
+                </div>
+              </div>
+              <div className="h-44 bg-[#0B1210] flex overflow-hidden">
+                {/* Kiosk left panel */}
+                <div className="w-28 bg-[#0f1f18] border-r border-white/5 flex flex-col items-center justify-center gap-2 p-3">
+                  <div className="w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-500/30" />
+                  <div className="w-16 h-1.5 rounded bg-white/10" />
+                  <div className="w-12 h-1 rounded bg-white/5" />
+                  <div className="mt-2 text-[8px] text-emerald-400 font-mono">11:32</div>
+                </div>
+                {/* DNI input area */}
+                <div className="flex-1 flex flex-col items-center justify-center gap-2 p-3">
+                  <div className="w-full h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center">
+                    <span className="text-[9px] text-slate-500 tracking-widest">DNI / NIE</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1 w-full">
+                    {[1,2,3,4,5,6,7,8,9,'',0,''].map((n, i) => (
+                      <div key={i} className="h-6 rounded-md bg-white/8 border border-white/5 flex items-center justify-center text-[8px] text-slate-400">
+                        {n}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+                  <Smartphone size={20} className="text-emerald-400" />
+                </div>
+                <div>
+                  <h2 className="font-bold text-white text-lg leading-tight">Kiosko de Fichaje</h2>
+                  <p className="text-xs text-slate-500">Tablet · Terminal compartido</p>
+                </div>
+              </div>
+              <p className="text-slate-400 text-sm mb-5 leading-relaxed">
+                Terminal táctil para que los empleados registren entradas, salidas y descansos identificándose con su DNI.
+              </p>
+              <div className="flex flex-wrap gap-2 mb-6">
+                {['Entrada / Salida','Descanso','Historial mensual','Solicitar ausencia'].map(f => (
+                  <span key={f} className="text-[11px] bg-white/5 border border-white/8 text-slate-400 px-2.5 py-1 rounded-lg">{f}</span>
+                ))}
+              </div>
+              <button
+                onClick={() => handleEnter('kiosk')}
+                disabled={!!loading}
+                className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-colors"
+              >
+                {loading === 'kiosk'
+                  ? <><Loader2 size={16} className="animate-spin" /> Abriendo...</>
+                  : <>Abrir Kiosko <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" /></>
+                }
+              </button>
+            </div>
           </div>
         </div>
 
         {error && (
-          <div className="mt-6 bg-red-500/10 border border-red-500/30 text-red-400 text-sm p-4 rounded-xl text-center">
-            {error}
-          </div>
+          <p className="text-center text-red-400 text-sm mt-6">{error}</p>
         )}
 
-        <p className="text-center text-xs text-slate-600 mt-8">
-          Datos ficticios · Solo para demostración · No representa datos reales
+        <p className="text-center text-xs text-slate-700 mt-12">
+          Datos ficticios · Entorno aislado · No representa datos reales de ninguna empresa
         </p>
-      </div>
+      </section>
     </div>
   );
 }

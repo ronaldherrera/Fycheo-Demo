@@ -396,6 +396,8 @@ const Settings = () => {
                     end2: '20:00',
                     breakMins: 0,
                     breakPaid: false,
+                    breakMins2: 0,
+                    breakPaid2: false,
                     hasPlus: false
                   });
                   setIsShiftTypeModalOpen(true);

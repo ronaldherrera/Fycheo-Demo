@@ -46,7 +46,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
           .in('role', ['admin', 'hr', 'manager'])
           .limit(1);
 
-        const ok = (owned && owned.length > 0) || (member && member.length > 0);
+        const ok = !!((owned && owned.length > 0) || (member && member.length > 0));
         setHasAccess(ok);
         if (!ok) await signOut();
       } catch (e) {

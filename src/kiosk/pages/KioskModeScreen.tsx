@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { adjustDataToCurrentDate, adjustDateString, deAdjustISOString, deAdjustDateString } from '../../lib/date-adjuster';
 import { Clock, LogOut, CheckCircle2, AlertCircle, Loader2, Fingerprint } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -91,7 +92,7 @@ export default function KioskModeScreen() {
   const navigate = useNavigate();
   
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [dni, setDni] = useState('');
+  const [dni, setDni] = useState(() => localStorage.getItem('kiosk_demo_dni') || '');
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -165,34 +166,37 @@ export default function KioskModeScreen() {
        const startDateStr = isoDateLocal(firstDay);
        const endDateStr = isoDateLocal(lastDay);
 
-       // 1. Obtener los turnos del empleado
+       // 1. Obtener los turnos del empleado (desajustar fechas para la BD)
        const { data: shiftsData } = await supabase
          .from('shifts')
          .select('*')
          .eq('employee_id', userId)
          .eq('is_published', true)
-         .gte('date', startDateStr)
-         .lte('date', endDateStr);
+         .gte('date', deAdjustDateString(startDateStr))
+         .lte('date', deAdjustDateString(endDateStr));
 
        if (shiftsData) {
          const map: Record<string, any[]> = {};
-         shiftsData.forEach(s => { map[s.date] = [...(map[s.date] || []), s]; });
+         shiftsData.forEach(s => {
+           const adjustedDate = adjustDateString(s.date);
+           map[adjustedDate] = [...(map[adjustedDate] || []), { ...s, date: adjustedDate }];
+         });
          setMonthShifts(map);
        } else {
          setMonthShifts({});
        }
 
-       // 2. Obtener los fichajes (time_entries) de todo el mes actual visible en el calendario
+       // 2. Obtener los fichajes del mes (desajustar rango para la BD)
        const { data: entries, error: entriesError } = await supabase
          .from('time_entries')
          .select('*')
          .eq('user_id', userId)
-         .gte('occurred_at', firstDay.toISOString())
-         .lte('occurred_at', lastDay.toISOString() + 'T23:59:59.999Z')
+         .gte('occurred_at', deAdjustISOString(firstDay.toISOString()))
+         .lte('occurred_at', deAdjustISOString(lastDay.toISOString() + 'T23:59:59.999Z'))
          .order('occurred_at', { ascending: false });
 
        if (!entriesError && entries) {
-         setMonthEntries(entries);
+         setMonthEntries(adjustDataToCurrentDate(entries));
        }
 
        // 3. Obtener el horario semanal de la empresa
@@ -271,7 +275,7 @@ export default function KioskModeScreen() {
        if (memberData?.team_id) {
          const { data: tMembers } = await supabase
            .from('company_members')
-           .select('user_id, profiles!inner(full_name, avatar_url)')
+           .select('user_id, profiles!inner(full_name, avatar)')
            .eq('team_id', memberData.team_id)
            .eq('company_id', companyId);
          
@@ -290,14 +294,15 @@ export default function KioskModeScreen() {
            .select('*')
            .in('employee_id', teamIds)
            .eq('is_published', true)
-           .gte('date', startDateStr)
-           .lte('date', endDateStr);
+           .gte('date', deAdjustDateString(startDateStr))
+           .lte('date', deAdjustDateString(endDateStr));
 
          if (teamShiftsRes) {
            const tsMap: Record<string, any[]> = {};
            teamShiftsRes.forEach((s: any) => {
-             if (!tsMap[s.date]) tsMap[s.date] = [];
-             tsMap[s.date].push(s);
+             const adjustedDate = adjustDateString(s.date);
+             if (!tsMap[adjustedDate]) tsMap[adjustedDate] = [];
+             tsMap[adjustedDate].push({ ...s, date: adjustedDate });
            });
            setTeamShifts(tsMap);
          } else {
@@ -324,14 +329,14 @@ export default function KioskModeScreen() {
            .select('date, start_time, end_time')
            .eq('employee_id', userId)
            .eq('is_published', true)
-           .gte('date', startOfYear)
-           .lte('date', endOfYear),
+           .gte('date', deAdjustDateString(startOfYear))
+           .lte('date', deAdjustDateString(endOfYear)),
          supabase
            .from('time_entries')
            .select('entry_type, occurred_at')
            .eq('user_id', userId)
-           .gte('occurred_at', `${startOfYear}T00:00:00.000Z`)
-           .lte('occurred_at', `${endOfYear}T23:59:59.999Z`)
+           .gte('occurred_at', deAdjustISOString(`${startOfYear}T00:00:00.000Z`))
+           .lte('occurred_at', deAdjustISOString(`${endOfYear}T23:59:59.999Z`))
            .order('occurred_at', { ascending: true }),
        ]);
 
@@ -339,7 +344,7 @@ export default function KioskModeScreen() {
        if (shiftsRes.data) {
          shiftsRes.data.forEach(s => {
            if (!s.start_time || !s.end_time) return;
-           const m = new Date(s.date + 'T00:00:00').getMonth();
+           const m = new Date(adjustDateString(s.date) + 'T00:00:00').getMonth();
            const [sH, sM] = s.start_time.split(':').map(Number);
            const [eH, eM] = s.end_time.split(':').map(Number);
            let mins = (eH * 60 + eM) - (sH * 60 + sM);
@@ -348,11 +353,12 @@ export default function KioskModeScreen() {
          });
        }
 
+       const adjustedEntries = adjustDataToCurrentDate(entriesRes.data || []);
        const monthlyWorked: number[] = new Array(12).fill(0);
-       if (entriesRes.data) {
+       if (adjustedEntries.length) {
          let inTime: number | null = null;
          let inMonth: number | null = null;
-         for (const e of entriesRes.data) {
+         for (const e of adjustedEntries) {
            const ts = new Date(e.occurred_at).getTime();
            const mo = new Date(e.occurred_at).getMonth();
            const t  = e.entry_type;
@@ -493,7 +499,7 @@ export default function KioskModeScreen() {
     
     const updateTimer = () => {
       const now = new Date().getTime();
-      setElapsedTime(Math.floor((now - startTimestamp) / 1000));
+      setElapsedTime(Math.max(0, Math.floor((now - startTimestamp) / 1000)));
     };
 
     updateTimer();
@@ -558,7 +564,11 @@ export default function KioskModeScreen() {
   // Desglose por semana del mes actual
   const weeklyBreakdown = useMemo(() => {
     const now = new Date();
-    const today = isoDateLocal(now);
+    // En demo usamos el último día del mes como "hoy" para mostrar todos los datos
+    const lastEntryDate = monthEntries.length > 0
+      ? isoDateLocal(new Date(Math.max(...monthEntries.map(e => new Date(e.occurred_at).getTime()))))
+      : isoDateLocal(now);
+    const today = lastEntryDate > isoDateLocal(now) ? lastEntryDate : isoDateLocal(now);
     const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
     const lastDay  = new Date(now.getFullYear(), now.getMonth() + 1, 0);
     const weeks: { label: string; planned: number; worked: number; isFuture: boolean }[] = [];
@@ -613,12 +623,13 @@ export default function KioskModeScreen() {
   }, [monthShifts, monthEntries, lastEntryType]);
 
   const punctualityStats = useMemo(() => {
-    const MARGIN = 10; // minutos de margen para entradas y salidas
-    const todayStr = isoDateLocal(new Date());
+    const MARGIN = 10;
+    const lastEntryDate = monthEntries.length > 0
+      ? isoDateLocal(new Date(Math.max(...monthEntries.map(e => new Date(e.occurred_at).getTime()))))
+      : isoDateLocal(new Date());
+    const todayStr = lastEntryDate > isoDateLocal(new Date()) ? lastEntryDate : isoDateLocal(new Date());
     const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
 
-    // Recopilamos primer clock_in y último clock_out por día
-    // monthEntries viene descendente → invertimos para procesar en orden ascendente
     const clockInsByDate:  Record<string, any> = {};
     const clockOutsByDate: Record<string, any> = {};
 
@@ -654,20 +665,20 @@ export default function KioskModeScreen() {
       if (!expectedStart && !expectedEnd) return; // día no laborable
       daysAnalyzed++;
 
-      // Entrada: impuntual si |diff| > MARGIN (tanto tarde como pronto)
+      // Entrada: impuntual si |diff| > MARGIN (usamos UTC para comparar con los tiempos del turno)
       if (expectedStart && clockInsByDate[dateKey]) {
         const [sH, sM] = expectedStart.split(':').map(Number);
         const ci = new Date(clockInsByDate[dateKey].occurred_at);
-        const diff = (ci.getHours() * 60 + ci.getMinutes()) - (sH * 60 + sM);
+        const diff = (ci.getUTCHours() * 60 + ci.getUTCMinutes()) - (sH * 60 + sM);
         entryChecks++;
         if (Math.abs(diff) > MARGIN) { entryIncidents++; totalEntryDiff += Math.abs(diff); }
       }
 
-      // Salida: impuntual si |diff| > MARGIN (tanto pronto como tarde)
+      // Salida: impuntual si |diff| > MARGIN
       if (expectedEnd && clockOutsByDate[dateKey]) {
         const [eH, eM] = expectedEnd.split(':').map(Number);
         const co = new Date(clockOutsByDate[dateKey].occurred_at);
-        const diff = (co.getHours() * 60 + co.getMinutes()) - (eH * 60 + eM);
+        const diff = (co.getUTCHours() * 60 + co.getUTCMinutes()) - (eH * 60 + eM);
         exitChecks++;
         if (Math.abs(diff) > MARGIN) { exitIncidents++; totalExitDiff += Math.abs(diff); }
       }
@@ -894,24 +905,27 @@ export default function KioskModeScreen() {
         .from('time_entries')
         .select('*')
         .eq('user_id', userId)
-        .gte('occurred_at', startOfM.toISOString())
+        .gte('occurred_at', deAdjustISOString(startOfM.toISOString()))
         .order('occurred_at', { ascending: false });
 
       if (!entriesError && entries) {
-        setMonthEntries(entries);
+        setMonthEntries(adjustDataToCurrentDate(entries));
       }
 
+      // Solo la última entrada que, tras ajuste, sea anterior a ahora
       const { data: absoluteLast } = await supabase
         .from('time_entries')
         .select('*')
         .eq('user_id', userId)
+        .lte('occurred_at', deAdjustISOString(new Date().toISOString()))
         .order('occurred_at', { ascending: false })
         .limit(1)
         .maybeSingle();
 
       if (absoluteLast) {
-        setLastOverallEntry(absoluteLast);
-        setLastEntryType(absoluteLast.entry_type);
+        const adjusted = adjustDataToCurrentDate(absoluteLast);
+        setLastOverallEntry(adjusted);
+        setLastEntryType(adjusted.entry_type);
       } else {
         setLastOverallEntry(null);
         setLastEntryType(null);
@@ -975,36 +989,35 @@ export default function KioskModeScreen() {
         return;
       }
 
-      // 2. Buscar al empleado por DNI en esta empresa
-      // Supabase query using a join with company_members
-      const { data, error } = await supabase
+      // 2. Obtener todos los miembros de la empresa con sus perfiles y filtrar por DNI en JS
+      // (no se puede hacer ilike sobre tabla embebida en Supabase; RLS impide buscar profiles directamente)
+      const { data: members, error: membersError } = await supabase
         .from('company_members')
-        .select(`
-          user_id,
-          profiles!inner(
-            full_name,
-            avatar_url,
-            dni_nie
-          )
-        `)
-        .eq('company_id', companyId)
-        .ilike('profiles.dni_nie', dni.trim())
-        .single();
+        .select('user_id, profiles!inner(id, full_name, avatar, dni_nie)')
+        .eq('company_id', companyId);
 
-      if (error || !data) {
+      if (membersError) throw membersError;
+
+      const dniNorm = dni.trim().toLowerCase();
+      const match = (members || []).find((m: any) => {
+        const p = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles;
+        return p?.dni_nie?.toLowerCase() === dniNorm;
+      });
+
+      if (!match) {
         throw new Error('Empleado no encontrado o no pertenece a esta empresa');
       }
 
-      const profiles: any = data.profiles;
-      
-      await refreshEntries(data.user_id);
-      await loadCalendarData(currentDate, data.user_id);
+      const profile: any = Array.isArray(match.profiles) ? match.profiles[0] : match.profiles;
+
+      await refreshEntries(match.user_id);
+      await loadCalendarData(currentDate, match.user_id);
 
       setEmployee({
-        userId: data.user_id,
-        name: profiles.full_name,
-        avatar: profiles.avatar_url,
-        dni: profiles.dni_nie
+        userId: match.user_id,
+        name: profile.full_name,
+        avatar: profile.avatar,
+        dni: profile.dni_nie
       });
 
     } catch (err: any) {
@@ -1137,9 +1150,7 @@ export default function KioskModeScreen() {
 
           <div>
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-9 h-9 bg-primary rounded-xl flex items-center justify-center shadow-lg shadow-primary/20">
-                <Clock className="w-5 h-5 text-white" />
-              </div>
+              <img src="/icono-kiosko.svg" alt="Fycheo" className="w-9 h-9 rounded-xl shadow-lg shadow-primary/20" />
               <span className="text-base font-bold tracking-tight text-white">Fycheo Kiosko</span>
             </div>
 
@@ -1281,6 +1292,7 @@ export default function KioskModeScreen() {
                 {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Validar Identidad'}
               </button>
             </div>
+
 
           </div>
         )}

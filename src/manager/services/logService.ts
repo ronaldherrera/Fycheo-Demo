@@ -1,3 +1,4 @@
+import { adjustDataToCurrentDate } from '../../lib/date-adjuster';
 import { supabase } from './supabase';
 import type { ActivityLog } from '../types';
 
@@ -28,10 +29,10 @@ export const logService = {
       return acc;
     }, {});
 
-    return data.map((log: any) => ({
+    return adjustDataToCurrentDate(data.map((log: any) => ({
       ...log,
       manager: profileMap[log.manager_id] || null
-    })) as ActivityLog[];
+    }))) as ActivityLog[];
   },
 
   async logAction(

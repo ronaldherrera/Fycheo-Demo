@@ -38,9 +38,8 @@ const plans = [
 ];
 
 const Account = () => {
-    const { user, profile } = useAuth();
-    // Simular plan actual (idealmente vendría del profile)
-    const [currentPlan, setCurrentPlan] = useState(profile?.plan_selected || 'free'); 
+    const { user, profile, activeCompany } = useAuth();
+    const [currentPlan, setCurrentPlan] = useState(activeCompany?.plan || profile?.plan_selected || 'free');
 
     const handlePlanChange = (planId: string) => {
         // Aquí iría la lógica real de cambio de plan (Stripe, etc.)
@@ -68,10 +67,14 @@ const Account = () => {
                         <div className="text-white font-medium capitalize">{profile?.role || 'Gestor'}</div>
                     </div>
                      <div>
+                        <label className="block text-sm font-medium text-slate-400 mb-1">Nombre</label>
+                        <div className="text-white font-medium">{profile?.full_name || profile?.name || '—'}</div>
+                    </div>
+                     <div>
                         <label className="block text-sm font-medium text-slate-400 mb-1">Empresa</label>
                         <div className="text-white font-medium flex items-center gap-2">
                              <Building2 className="h-4 w-4 text-slate-500" />
-                            {profile?.company_id ? 'Empresa Registrada' : 'Sin empresa asignada'}
+                            {activeCompany?.name || 'Sin empresa asignada'}
                         </div>
                     </div>
                 </div>

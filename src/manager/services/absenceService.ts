@@ -1,5 +1,13 @@
+import { adjustDataToCurrentDate, adjustDateString } from '../../lib/date-adjuster';
 import { supabase } from './supabase';
 import type { Absence } from '../types';
+
+const adjustAbsenceDates = (absences: any[]): any[] =>
+  absences.map(a => ({
+    ...a,
+    start_date: a.start_date ? adjustDateString(a.start_date) : a.start_date,
+    end_date: a.end_date ? adjustDateString(a.end_date) : a.end_date,
+  }));
 
 export const absenceService = {
   /**
@@ -19,7 +27,7 @@ export const absenceService = {
       throw error;
     }
 
-    return (data || []) as Absence[];
+    return adjustAbsenceDates(adjustDataToCurrentDate(data || [])) as Absence[];
   },
 
   /**
@@ -39,7 +47,7 @@ export const absenceService = {
       throw error;
     }
 
-    return (data || []) as Absence[];
+    return adjustAbsenceDates(adjustDataToCurrentDate(data || [])) as Absence[];
   },
 
   /**

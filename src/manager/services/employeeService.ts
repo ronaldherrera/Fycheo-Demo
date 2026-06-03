@@ -1,3 +1,4 @@
+import { adjustDataToCurrentDate, deAdjustISOString } from '../../lib/date-adjuster';
 import { supabase } from './supabase';
 import type { Employee } from '../types';
 
@@ -156,29 +157,27 @@ export const employeeService = {
       .from('time_entries')
       .select('*')
       .eq('user_id', userId)
-      .gte('occurred_at', startDate)
-      .lte('occurred_at', endDate)
+      .gte('occurred_at', deAdjustISOString(startDate))
+      .lte('occurred_at', deAdjustISOString(endDate))
       .order('occurred_at', { ascending: true });
 
     if (error) throw error;
-    return data || [];
+    return adjustDataToCurrentDate(data || []);
   },
 
   async getTimeEntriesForUsers(userIds: string[], startDate: string, endDate: string) {
     if (!userIds || userIds.length === 0) return [];
-    
-    // Si hay muchos usuarios, puede ser necesario hacer chunking, 
-    // pero Supabase soporta filtros 'in' bastante grandes.
+
     const { data, error } = await supabase
       .from('time_entries')
       .select('*')
       .in('user_id', userIds)
-      .gte('occurred_at', startDate)
-      .lte('occurred_at', endDate)
+      .gte('occurred_at', deAdjustISOString(startDate))
+      .lte('occurred_at', deAdjustISOString(endDate))
       .order('occurred_at', { ascending: true });
 
     if (error) throw error;
-    return data || [];
+    return adjustDataToCurrentDate(data || []);
   },
 
   async createTimeEntry(payload: any) {

@@ -1,3 +1,4 @@
+import { adjustDataToCurrentDate, deAdjustISOString, deAdjustDateString } from '../../lib/date-adjuster';
 import { supabase } from './supabase';
 
 export interface DashboardFilters {
@@ -78,20 +79,24 @@ export const dashboardService = {
 
     // 3. Fichajes del día seleccionado
     const targetDate = filters.date;
-    const { data: dayShifts } = await supabase
+    // Convertir la fecha UI al equivalente en la BD (los datos de demo tienen offset)
+    const dbTargetDate = deAdjustDateString(targetDate);
+    const { data: rawDayShifts } = await supabase
       .from('shifts')
       .select('*')
       .eq('company_id', companyId)
-      .eq('date', targetDate)
+      .eq('date', dbTargetDate)
       .in('employee_id', employeeIds);
+    const dayShifts = adjustDataToCurrentDate(rawDayShifts);
 
     // 3. Alertas / Pendientes (Ausencias sin aprobar detalladas)
-    const { data: pendingAbsences } = await supabase
+    const { data: rawPendingAbsences } = await supabase
       .from('absences')
       .select('*')
       .eq('company_id', companyId)
       .eq('status', 'pending')
       .in('employee_id', employeeIds);
+    const pendingAbsences = adjustDataToCurrentDate(rawPendingAbsences);
 
     const alertsList = pendingAbsences?.map(abs => {
       const emp = profiles?.find(p => p.id === abs.employee_id);
@@ -106,12 +111,13 @@ export const dashboardService = {
     }) || [];
 
     // 3.5 Solicitudes de Fichaje (time_entries)
-    const { data: pendingTimeEntries } = await supabase
+    const { data: rawPendingTimeEntries } = await supabase
       .from('time_entries')
       .select('id, user_id, entry_type, occurred_at')
       .eq('company_id', companyId)
       .eq('status', 'pending')
       .in('user_id', employeeIds);
+    const pendingTimeEntries = adjustDataToCurrentDate(rawPendingTimeEntries);
 
     const pendingTimeRequests = pendingTimeEntries?.map(entry => {
       const emp = profiles?.find(p => p.id === entry.user_id);
@@ -131,22 +137,25 @@ export const dashboardService = {
       .eq('company_id', companyId)
       .eq('status', 'approved')
       .in('employee_id', employeeIds)
-      .lte('start_date', targetDate)
-      .gte('end_date', targetDate); // Asumimos que end_date no es null para el MVP
+      .lte('start_date', dbTargetDate)
+      .gte('end_date', dbTargetDate);
 
     // 5. Empleados Presentes (basado en fichajes reales de hoy)
-    // Convertir fecha local a UTC para filtrar correctamente el timestamptz de Supabase
     const todayStartLocal = new Date(`${targetDate}T00:00:00`);
     const todayEndLocal = new Date(`${targetDate}T23:59:59.999`);
     const todayStart = todayStartLocal.toISOString();
     const todayEnd = todayEndLocal.toISOString();
-    const { data: todayEntries } = await supabase
+    // Desajustar a fechas de la BD para la consulta
+    const dbTodayStart = deAdjustISOString(todayStart);
+    const dbTodayEnd = deAdjustISOString(todayEnd);
+    const { data: rawTodayEntries } = await supabase
       .from('time_entries')
       .select('id, user_id, entry_type, occurred_at, status')
       .in('user_id', employeeIds)
-      .gte('occurred_at', todayStart)
-      .lte('occurred_at', todayEnd)
+      .gte('occurred_at', dbTodayStart)
+      .lte('occurred_at', dbTodayEnd)
       .order('occurred_at', { ascending: true });
+    const todayEntries = adjustDataToCurrentDate(rawTodayEntries);
 
     // Agrupar por empleado y determinar su estado actual
     const entriesByEmployee: Record<string, any[]> = {};
@@ -184,13 +193,15 @@ export const dashboardService = {
     const startDateObj = new Date(targetDate);
     startDateObj.setDate(startDateObj.getDate() - 6);
     const sevenDaysAgoStart = new Date(`${startDateObj.toISOString().split('T')[0]}T00:00:00`).toISOString();
+    const dbSevenDaysAgoStart = deAdjustISOString(sevenDaysAgoStart);
 
-    const { data: recentEntries } = await supabase
+    const { data: rawRecentEntries } = await supabase
       .from('time_entries')
       .select('occurred_at, user_id')
       .in('user_id', employeeIds)
-      .gte('occurred_at', sevenDaysAgoStart)
-      .lte('occurred_at', todayEnd);
+      .gte('occurred_at', dbSevenDaysAgoStart)
+      .lte('occurred_at', dbTodayEnd);
+    const recentEntries = adjustDataToCurrentDate(rawRecentEntries);
 
     // Agrupar por día y contar empleados únicos que ficharon (clock-in)
     const activityMap: Record<string, Set<string>> = {};
