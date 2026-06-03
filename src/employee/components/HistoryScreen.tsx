@@ -105,7 +105,7 @@ const HistoryScreen: React.FC = () => {
   const [canDelete, setCanDelete] = useState(false); // Restricción de borrado: solo el último global
 
   // Constraints for editing
-  const [editConstraints, setEditConstraints] = useState<{min: string | null, max: string | null, minTime?: Date, maxTime?: Date, minType?: string, maxType?: string} | null>(null);
+  const [editConstraints, setEditConstraints] = useState<{min: string | null, max: string | null, minTime?: Date, maxTime?: Date, minType?: string | null, maxType?: string | null} | null>(null);
   const [latestGlobalId, setLatestGlobalId] = useState<string | null>(null); // ID of the absolute latest record
   
   // Custom Error Modal State
@@ -1658,11 +1658,11 @@ const HistoryScreen: React.FC = () => {
                                 {/* Min Node (Left) */}
                                 <div className="relative z-10 flex flex-col items-center">
                                     {(() => {
-                                    const [txt, brd] = getThemeColors(editConstraints.minType);
+                                    const [txt, brd] = getThemeColors(editConstraints.minType ?? null);
                                     return (
                                         <div className={`size-8 rounded-full border-2 bg-white dark:bg-[#1C1C1E] flex items-center justify-center shadow-sm ${editConstraints.minTime ? brd : 'border-slate-100 dark:border-slate-800 opacity-50'}`}>
                                             <span className={`material-symbols-outlined text-[16px] ${txt}`}>
-                                                {getIcon(editConstraints.minType)}
+                                                {getIcon(editConstraints.minType ?? null)}
                                             </span>
                                         </div>
                                     );
@@ -1679,11 +1679,11 @@ const HistoryScreen: React.FC = () => {
                                 {/* Max Node (Right) */}
                                 <div className="relative z-10 flex flex-col items-center">
                                     {(() => {
-                                    const [txt, brd] = getThemeColors(editConstraints.maxType);
+                                    const [txt, brd] = getThemeColors(editConstraints.maxType ?? null);
                                     return (
                                         <div className={`size-8 rounded-full border-2 bg-white dark:bg-[#1C1C1E] flex items-center justify-center shadow-sm ${editConstraints.maxTime ? brd : 'border-slate-100 dark:border-slate-800 opacity-50'}`}>
                                             <span className={`material-symbols-outlined text-[16px] ${txt}`}>
-                                                {getIcon(editConstraints.maxType)}
+                                                {getIcon(editConstraints.maxType ?? null)}
                                             </span>
                                         </div>
                                     );

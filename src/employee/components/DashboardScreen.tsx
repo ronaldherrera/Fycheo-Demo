@@ -38,7 +38,7 @@ type TimeEntry = {
   description: string | null;
   minutes?: number | null;
   created_at: string;
-  companies?: { name: string } | null;
+  companies?: { name: string }[] | { name: string } | null;
   status?: string | null;
 };
 
