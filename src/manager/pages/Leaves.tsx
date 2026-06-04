@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { absenceService } from '../services/absenceService';
 import { employeeService } from '../services/employeeService';
@@ -266,7 +267,7 @@ export default function Leaves() {
                       key={absence.id}
                       className="bg-surface-dark rounded-2xl border border-white/10 overflow-hidden flex flex-col md:flex-row md:items-center justify-between p-4 gap-4"
                     >
-                      <div className="flex items-center gap-4 min-w-0 md:min-w-[250px] w-full md:w-auto">
+                      <Link to={`/manager/equipos/trabajador/${absence.employee_id}`} className="flex items-center gap-4 min-w-0 md:min-w-[250px] w-full md:w-auto hover:text-primary transition-colors">
                         <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center overflow-hidden border border-white/10 shrink-0">
                           {emp?.avatar ? (
                               <img src={emp.avatar} alt={emp.full_name || emp.name} className="w-full h-full object-cover" />
@@ -274,7 +275,7 @@ export default function Leaves() {
                               <User className="text-slate-500" size={24} />
                           )}
                         </div>
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <h3 className="font-bold text-white text-base leading-tight truncate">
                             {emp ? (emp.full_name || emp.name) : 'Usuario eliminado'}
                           </h3>
@@ -285,7 +286,7 @@ export default function Leaves() {
                             {policyInfo.name}
                           </span>
                         </div>
-                      </div>
+                      </Link>
 
                       <div className="flex-1 flex flex-col sm:flex-row sm:items-center gap-4 md:gap-6 px-0 md:px-4 md:border-l border-white/10 w-full md:w-auto">
                         <div className="flex items-center gap-3 text-sm flex-wrap">
@@ -359,16 +360,16 @@ export default function Leaves() {
                     
                     <div className="p-5 flex-1 flex flex-col">
                       <div className="flex justify-between items-start mb-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center overflow-hidden border border-white/10">
+                        <Link to={`/manager/equipos/trabajador/${absence.employee_id}`} className="flex items-center gap-3 hover:text-primary transition-colors min-w-0">
+                          <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center overflow-hidden border border-white/10 shrink-0">
                             {emp?.avatar ? (
                                 <img src={emp.avatar} alt={emp.full_name || emp.name} className="w-full h-full object-cover" />
                             ) : (
                                 <User className="text-slate-500" size={20} />
                             )}
                           </div>
-                          <div>
-                            <h3 className="font-bold text-white text-base leading-tight">
+                          <div className="min-w-0">
+                            <h3 className="font-bold text-white text-base leading-tight truncate">
                               {emp ? (emp.full_name || emp.name) : 'Usuario eliminado'}
                             </h3>
                             <span 
@@ -378,7 +379,7 @@ export default function Leaves() {
                               {policyInfo.name}
                             </span>
                           </div>
-                        </div>
+                        </Link>
                         {getStatusBadge(absence.status)}
                       </div>
 

@@ -83,7 +83,7 @@ const TasksPanel: React.FC<TasksPanelProps> = ({ onPendingChange }) => {
       const { data, error } = await supabase
         .from('tasks')
         .select('*')
-        .eq('employee_id', user.id)
+        .eq('assigned_to', user.id)
         .eq('status', 'pending')
         .order('created_at', { ascending: false });
 
@@ -133,7 +133,7 @@ const TasksPanel: React.FC<TasksPanelProps> = ({ onPendingChange }) => {
           event: '*',
           schema: 'public',
           table: 'tasks',
-          filter: `employee_id=eq.${user.id}`,
+          filter: `assigned_to=eq.${user.id}`,
         },
         (payload) => {
           if (payload.eventType === 'INSERT') {

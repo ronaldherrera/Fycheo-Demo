@@ -14,8 +14,8 @@ DECLARE
   company_id UUID := gen_random_uuid();
   team_reparto_id UUID := gen_random_uuid();
   team_almacen_id UUID := gen_random_uuid();
-  team_admin_id UUID := gen_random_uuid();
-  team_conductores_id UUID := gen_random_uuid();
+  team_oficina_id UUID := gen_random_uuid();
+  team_direccion_id UUID := gen_random_uuid();
 BEGIN
   SELECT id INTO admin_id FROM auth.users WHERE email = 'demo.admin@fycheo-demo.com';
   SELECT id INTO manager_id FROM auth.users WHERE email = 'demo.manager@fycheo-demo.com';
@@ -49,14 +49,12 @@ BEGIN
       "shift_types": [
         {"name": "Mañana",    "color": "#3b82f6", "start": "06:00", "end": "14:00"},
         {"name": "Tarde",     "color": "#f59e0b", "start": "14:00", "end": "22:00"},
-        {"name": "Jornada Completa", "color": "#10b981", "start": "08:00", "end": "17:00"},
-        {"name": "Partido",   "color": "#8b5cf6", "start": "08:00", "end": "13:00"}
+        {"name": "Jornada Completa", "color": "#10b981", "start": "08:00", "end": "17:00"}
       ],
       "leave_policies": [
         {"id": "vacation", "name": "Vacaciones", "color": "emerald", "hex": "#10b981", "limitUnit": "days", "limitPeriod": "year", "maxAmount": 23, "minAmount": 1, "isPaid": true},
         {"id": "sick",     "name": "Baja Médica", "color": "red",     "hex": "#ef4444", "limitUnit": "days", "limitPeriod": "year", "maxAmount": 365, "minAmount": 1, "isPaid": true},
-        {"id": "personal", "name": "Asuntos Propios", "color": "blue", "hex": "#3b82f6", "limitUnit": "days", "limitPeriod": "year", "maxAmount": 5, "minAmount": 1, "isPaid": true},
-        {"id": "maternity","name": "Maternidad/Paternidad", "color": "pink", "hex": "#ec4899", "limitUnit": "days", "limitPeriod": "year", "maxAmount": 112, "minAmount": 1, "isPaid": true}
+        {"id": "personal", "name": "Asuntos Propios", "color": "blue", "hex": "#3b82f6", "limitUnit": "days", "limitPeriod": "year", "maxAmount": 5, "minAmount": 1, "isPaid": true}
       ]
     }'::jsonb,
     NOW() - INTERVAL '14 months'
@@ -69,33 +67,30 @@ BEGIN
 
   -- Crear equipos
   INSERT INTO public.teams (id, company_id, name, description, created_at) VALUES
-    (team_reparto_id,    company_id, 'Repartidores',     'Equipo de reparto y entrega a clientes', NOW() - INTERVAL '13 months'),
-    (team_almacen_id,    company_id, 'Almacén',           'Personal de almacén y logística', NOW() - INTERVAL '13 months'),
-    (team_admin_id,      company_id, 'Administración',    'Equipo administrativo y contabilidad', NOW() - INTERVAL '13 months'),
-    (team_conductores_id,company_id, 'Conductores',       'Conductores de largo recorrido', NOW() - INTERVAL '13 months');
+    (team_reparto_id,   company_id, 'Repartidores', 'Equipo de reparto y entrega a clientes', NOW() - INTERVAL '13 months'),
+    (team_almacen_id,   company_id, 'Almacén',      'Personal de almacén y logística', NOW() - INTERVAL '13 months'),
+    (team_oficina_id,   company_id, 'Oficina',      'Personal de soporte, oficina y contabilidad', NOW() - INTERVAL '13 months'),
+    (team_direccion_id, company_id, 'Dirección',    'Equipo de administración y dirección general', NOW() - INTERVAL '13 months');
 
   -- Vincular usuarios admin a la empresa
   INSERT INTO public.company_members (user_id, company_id, role, accepted, team_id) VALUES
-    (admin_id,   company_id, 'admin',   true, team_admin_id),
-    (manager_id, company_id, 'manager', true, team_admin_id),
-    (rrhh_id,    company_id, 'hr',      true, team_admin_id);
+    (admin_id,   company_id, 'admin',   true, team_direccion_id),
+    (manager_id, company_id, 'manager', true, team_direccion_id),
+    (rrhh_id,    company_id, 'hr',      true, team_direccion_id);
 
-  -- Festivos de la empresa (año actual y anterior)
+  -- Festivos de la empresa (Año 2026)
   INSERT INTO public.company_holidays (company_id, name, date, type) VALUES
-    -- Festivos nacionales
-    (company_id, 'Año Nuevo',            (DATE_TRUNC('year', NOW()) - INTERVAL '1 year')::date + '0 days'::interval, 'closed'),
-    (company_id, 'Reyes Magos',          (DATE_TRUNC('year', NOW()) - INTERVAL '1 year')::date + '6 days'::interval, 'closed'),
-    (company_id, 'Día del Trabajador',   (DATE_TRUNC('year', NOW()) - INTERVAL '1 year' + INTERVAL '4 months')::date, 'closed'),
-    (company_id, 'Asunción',             (DATE_TRUNC('year', NOW()) - INTERVAL '1 year' + INTERVAL '7 months' + '14 days'::interval)::date, 'closed'),
-    (company_id, 'Fiesta Nacional',      (DATE_TRUNC('year', NOW()) - INTERVAL '1 year' + INTERVAL '9 months' + '11 days'::interval)::date, 'closed'),
-    (company_id, 'Todos los Santos',     (DATE_TRUNC('year', NOW()) - INTERVAL '1 year' + INTERVAL '10 months')::date, 'closed'),
-    (company_id, 'Constitución',         (DATE_TRUNC('year', NOW()) - INTERVAL '1 year' + INTERVAL '11 months' + '5 days'::interval)::date, 'closed'),
-    (company_id, 'Inmaculada',           (DATE_TRUNC('year', NOW()) - INTERVAL '1 year' + INTERVAL '11 months' + '7 days'::interval)::date, 'closed'),
-    (company_id, 'Navidad',              (DATE_TRUNC('year', NOW()) - INTERVAL '1 year' + INTERVAL '11 months' + '24 days'::interval)::date, 'closed'),
-    -- Año actual
-    (company_id, 'Año Nuevo',            DATE_TRUNC('year', NOW())::date, 'closed'),
-    (company_id, 'Reyes Magos',          (DATE_TRUNC('year', NOW()) + '6 days'::interval)::date, 'closed'),
-    (company_id, 'Día del Trabajador',   (DATE_TRUNC('year', NOW()) + INTERVAL '4 months')::date, 'closed');
+    (company_id, 'Año Nuevo',            '2026-01-01', 'closed'),
+    (company_id, 'Reyes Magos',          '2026-01-06', 'closed'),
+    (company_id, 'Jueves Santo',         '2026-04-02', 'closed'),
+    (company_id, 'Viernes Santo',        '2026-04-03', 'closed'),
+    (company_id, 'Día del Trabajador',   '2026-05-01', 'closed'),
+    (company_id, 'Asunción',             '2026-08-15', 'closed'),
+    (company_id, 'Fiesta Nacional',      '2026-10-12', 'closed'),
+    (company_id, 'Todos los Santos',     '2026-11-01', 'closed'),
+    (company_id, 'Constitución',         '2026-12-06', 'closed'),
+    (company_id, 'Inmaculada',           '2026-12-08', 'closed'),
+    (company_id, 'Navidad',              '2026-12-25', 'closed');
 
   RAISE NOTICE 'Empresa y equipos creados correctamente.';
   RAISE NOTICE '';

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Plus, Search, Filter, MoreVertical } from 'lucide-react';
 import { employeeService } from '../services/employeeService';
 import type { Employee, EmployeeRole } from '../types';
@@ -151,25 +152,25 @@ const Employees = () => {
                         {employees.map((employee) => (
                             <tr key={employee.id} className="hover:bg-white/5 transition-colors group">
                                 <td className="px-6 py-4">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-slate-400 font-bold text-sm border border-white/10 overflow-hidden">
+                                    <Link to={`/manager/equipos/trabajador/${employee.id}`} className="flex items-center gap-3 hover:text-primary transition-colors min-w-0">
+                                        <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-slate-400 font-bold text-sm border border-white/10 overflow-hidden shrink-0">
                                             {employee.avatar ? (
                                                 <img src={employee.avatar} alt={employee.name} className="w-full h-full object-cover" />
                                             ) : (
                                                 (employee.name || employee.email).charAt(0).toUpperCase()
                                             )}
                                         </div>
-                                        <div>
-                                            <p className="font-semibold text-slate-200 text-sm">{employee.name || 'Sin nombre'}</p>
+                                        <div className="min-w-0">
+                                            <p className="font-semibold text-slate-200 text-sm truncate">{employee.name || 'Sin nombre'}</p>
                                             <p className="text-xs text-slate-400 flex items-center gap-1.5 flex-wrap">
-                                                <span>{employee.email}</span>
+                                                <span className="truncate">{employee.email}</span>
                                                 <span className="text-slate-600">•</span>
                                                 <span>{employee.phone || 'Sin teléfono'}</span>
                                                 <span className="text-slate-600">•</span>
                                                 <span>{inlineRoleLabels[employee.role] || employee.role}</span>
                                             </p>
                                         </div>
-                                    </div>
+                                    </Link>
                                 </td>
                                 <td className="px-6 py-4">
                                     <CustomSelect
@@ -217,25 +218,25 @@ const Employees = () => {
                 {employees.map((employee) => (
                   <div key={employee.id} className="p-4 space-y-4 hover:bg-white/5 transition-colors">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-slate-400 font-bold text-sm border border-white/10 overflow-hidden">
+                      <Link to={`/manager/equipos/trabajador/${employee.id}`} className="flex items-center gap-3 hover:text-primary transition-colors min-w-0">
+                        <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-slate-400 font-bold text-sm border border-white/10 overflow-hidden shrink-0">
                           {employee.avatar ? (
                             <img src={employee.avatar} alt={employee.name} className="w-full h-full object-cover" />
                           ) : (
                             (employee.name || employee.email).charAt(0).toUpperCase()
                           )}
                         </div>
-                        <div>
-                          <p className="font-semibold text-slate-200 text-sm">{employee.name || 'Sin nombre'}</p>
+                        <div className="min-w-0">
+                          <p className="font-semibold text-slate-200 text-sm truncate">{employee.name || 'Sin nombre'}</p>
                           <p className="text-xs text-slate-400 flex items-center gap-1.5 flex-wrap">
-                            <span>{employee.email}</span>
+                            <span className="truncate">{employee.email}</span>
                             <span className="text-slate-600">•</span>
                             <span>{employee.phone || 'Sin teléfono'}</span>
                             <span className="text-slate-600">•</span>
                             <span>{inlineRoleLabels[employee.role] || employee.role}</span>
                           </p>
                         </div>
-                      </div>
+                      </Link>
                       <button className="p-2 text-slate-400 hover:text-slate-300 rounded-lg hover:bg-white/5 transition-all">
                         <MoreVertical size={18} />
                       </button>

@@ -1,56 +1,49 @@
 -- =============================================================
--- FYCHEO DEMO — PASO 4: Turnos y Fichajes (12 meses de historial)
--- Genera datos realistas de lunes a viernes
--- =============================================================
--- Ejecuta este script DESPUÉS de 03_demo_employees.sql
--- Tarda ~10-30 segundos en ejecutarse
+-- FYCHEO DEMO — PASO 4: Turnos y Fichajes (Año 2026 completo)
+-- Genera programación para todo 2026 y fichajes hasta hoy
 -- =============================================================
 
 DO $$
 DECLARE
   company_uuid UUID;
-  emp_record RECORD;
   emp_ids UUID[];
+  emp UUID;
+  emp_email TEXT;
+  team_name TEXT;
   d DATE;
-  d_start DATE;
-  d_end DATE;
-  day_of_week INT;
+  d_start DATE := '2026-01-01'::DATE;
+  d_end DATE := '2026-12-31'::DATE;
+  dow INT;
 
-  -- Variables de tiempo
-  start_h INT;
-  start_m INT;
-  end_h INT;
-  end_m INT;
-  break_start_h INT;
-  break_end_h INT;
+  -- Variables de turno
+  sh_color TEXT;
+  sh_start TEXT;
+  sh_end TEXT;
+  sh_status TEXT;
+  
+  -- Horas de fichaje
+  ci_h INT; ci_m INT; co_h INT; co_m INT;
+  br_s_h INT; br_s_m INT; br_e_h INT; br_e_m INT;
+  
+  -- Timestamps
+  t_ci TIMESTAMPTZ; t_bs TIMESTAMPTZ; t_be TIMESTAMPTZ; t_co TIMESTAMPTZ;
 
-  -- Shift color/type selection
-  shift_color TEXT;
-  shift_start TEXT;
-  shift_end TEXT;
-  shift_name TEXT;
-  rand_val FLOAT;
+  -- Ausencias programadas
+  is_on_leave BOOLEAN;
+  is_holiday BOOLEAN;
 
-  -- IDs generados
-  shift_id UUID;
-  entry_id UUID;
-  clockin_time TIMESTAMPTZ;
-  clockout_time TIMESTAMPTZ;
-  break_s_time TIMESTAMPTZ;
-  break_e_time TIMESTAMPTZ;
-
-  -- Para calcular ausencias
-  absence_chance FLOAT;
-  absence_type TEXT;
-  absence_days INT;
-
+  -- Control de rotación
+  emp_idx INT := 0;
+  week_index INT;
+  shift_index INT;
+  
 BEGIN
   SELECT id INTO company_uuid FROM public.companies WHERE name = 'Distribuciones Martínez S.A.' LIMIT 1;
   IF company_uuid IS NULL THEN
     RAISE EXCEPTION 'Empresa no encontrada.';
   END IF;
 
-  -- Obtener todos los empleados de la empresa
+  -- Obtener todos los empleados
   SELECT ARRAY_AGG(user_id) INTO emp_ids
   FROM public.company_members
   WHERE company_id = company_uuid AND role = 'employee';
@@ -59,101 +52,143 @@ BEGIN
     RAISE EXCEPTION 'No hay empleados. Ejecuta 03_demo_employees.sql primero.';
   END IF;
 
-  -- Rango de fechas: 12 meses atrás hasta ayer
-  d_start := CURRENT_DATE - INTERVAL '12 months';
-  d_end := CURRENT_DATE - INTERVAL '1 day';
+  RAISE NOTICE 'Generando turnos y fichajes para todo 2026 (% empleados)...', array_length(emp_ids, 1);
 
-  RAISE NOTICE 'Generando turnos y fichajes del % al % para % empleados...',
-    d_start, d_end, array_length(emp_ids, 1);
+  -- Limpiar turnos y fichajes anteriores si los hubiera
+  DELETE FROM public.shifts WHERE company_id = company_uuid;
+  DELETE FROM public.time_entries WHERE company_id = company_uuid;
 
   -- Bucle por cada empleado
-  FOREACH entry_id IN ARRAY emp_ids
+  FOREACH emp IN ARRAY emp_ids
   LOOP
+    emp_idx := emp_idx + 1;
+
+    -- Obtener email para comprobar ausencias específicas
+    SELECT p.email INTO emp_email
+    FROM public.profiles p
+    WHERE p.id = emp;
+
     d := d_start;
 
     WHILE d <= d_end LOOP
-      day_of_week := EXTRACT(DOW FROM d); -- 0=domingo, 6=sábado
+      dow := EXTRACT(DOW FROM d); -- 0=domingo, 6=sábado
 
-      -- Solo días laborables (lunes-viernes)
-      IF day_of_week BETWEEN 1 AND 5 THEN
+      -- Solo días laborables (lunes a viernes)
+      IF dow BETWEEN 1 AND 5 THEN
+        
+        -- 1. Comprobar si es Festivo
+        SELECT EXISTS (
+          SELECT 1 FROM public.company_holidays 
+          WHERE company_id = company_uuid AND date = d
+        ) INTO is_holiday;
 
-        rand_val := random();
-
-        -- 5% de probabilidad de ausencia planificada en días laborables
-        IF rand_val < 0.05 THEN
-          -- No crear turno ni fichaje ese día (ya hay una ausencia)
-          -- (las ausencias se crean en el paso 05)
-          NULL;
-
-        -- 3% de probabilidad de no fichar (ausencia sin justificar)
-        ELSIF rand_val < 0.08 THEN
-          -- Solo crear turno programado, sin fichaje
-          shift_color := (ARRAY['#3b82f6', '#10b981', '#8b5cf6'])[floor(random()*3+1)::int];
-
-          IF shift_color = '#3b82f6' THEN
-            shift_start := '06:00'; shift_end := '14:00';
-          ELSIF shift_color = '#10b981' THEN
-            shift_start := '08:00'; shift_end := '17:00';
-          ELSE
-            shift_start := '14:00'; shift_end := '22:00';
-          END IF;
-
-          INSERT INTO public.shifts (id, employee_id, company_id, date, start_time, end_time, color, status, is_published)
-          VALUES (gen_random_uuid(), entry_id, company_uuid, d, shift_start, shift_end, shift_color, 'absent', true);
-
-        ELSE
-          -- Día normal: crear turno + fichajes
-
-          -- Asignar turno según equipo del empleado (simplificado: aleatorio)
-          rand_val := random();
-          IF rand_val < 0.35 THEN
-            -- Turno mañana
-            shift_color := '#3b82f6';
-            shift_start := '06:00'; shift_end := '14:00';
-            start_h := 6; start_m := (floor(random()*15)::int);
-            end_h := 14; end_m := (floor(random()*20)::int);
-            break_start_h := 10; break_end_h := 10;
-          ELSIF rand_val < 0.70 THEN
-            -- Jornada completa
-            shift_color := '#10b981';
-            shift_start := '08:00'; shift_end := '17:00';
-            start_h := 8; start_m := (floor(random()*20)::int);
-            end_h := 17; end_m := (floor(random()*20)::int);
-            break_start_h := 13; break_end_h := 14;
-          ELSE
-            -- Turno tarde
-            shift_color := '#f59e0b';
-            shift_start := '14:00'; shift_end := '22:00';
-            start_h := 14; start_m := (floor(random()*15)::int);
-            end_h := 22; end_m := (floor(random()*15)::int);
-            break_start_h := 18; break_end_h := 18;
-          END IF;
-
-          shift_id := gen_random_uuid();
-
-          INSERT INTO public.shifts (id, employee_id, company_id, date, start_time, end_time, color, status, is_published)
-          VALUES (shift_id, entry_id, company_uuid, d, shift_start, shift_end, shift_color, 'completed', true);
-
-          -- Calcular timestamps de fichaje
-          clockin_time := (d::TEXT || 'T' || LPAD(start_h::TEXT, 2, '0') || ':' || LPAD(start_m::TEXT, 2, '0') || ':00+01:00')::TIMESTAMPTZ;
-          clockout_time := (d::TEXT || 'T' || LPAD(end_h::TEXT, 2, '0') || ':' || LPAD(end_m::TEXT, 2, '0') || ':00+01:00')::TIMESTAMPTZ;
-          break_s_time := (d::TEXT || 'T' || LPAD(break_start_h::TEXT, 2, '0') || ':' || LPAD((30 + floor(random()*20)::int)::TEXT, 2, '0') || ':00+01:00')::TIMESTAMPTZ;
-          break_e_time := break_s_time + INTERVAL '30 minutes' + (floor(random()*20) || ' minutes')::INTERVAL;
-
-          -- Insertar fichajes
-          INSERT INTO public.time_entries (id, user_id, company_id, entry_type, occurred_at, status)
-          VALUES
-            (gen_random_uuid(), entry_id, company_uuid, 'clock-in',    clockin_time,  'approved'),
-            (gen_random_uuid(), entry_id, company_uuid, 'break-start', break_s_time,  'approved'),
-            (gen_random_uuid(), entry_id, company_uuid, 'break-end',   break_e_time,  'approved'),
-            (gen_random_uuid(), entry_id, company_uuid, 'clock-out',   clockout_time, 'approved');
-
+        -- 2. Comprobar si está de Vacaciones o Baja
+        is_on_leave := false;
+        
+        -- Vacaciones de verano para todos (13 de julio al 26 de julio de 2026)
+        IF d BETWEEN '2026-07-13'::DATE AND '2026-07-26'::DATE THEN
+          is_on_leave := true;
         END IF;
-      END IF;
 
+        -- Vacaciones de Navidad para Pedro y Lucía (24 de diciembre al 31 de diciembre de 2026)
+        IF (emp_email IN ('pedro.jimenez@martinez-sa.com', 'empleado.demo@fycheo-demo.com', 'lucia.castillo@martinez-sa.com')) 
+           AND (d BETWEEN '2026-12-24'::DATE AND '2026-12-31'::DATE) THEN
+          is_on_leave := true;
+        END IF;
+
+        -- Baja médica de Carmen Blanco (1 de junio al 10 de junio de 2026 - ¡cubre hoy!)
+        IF (emp_email = 'carmen.blanco@martinez-sa.com') 
+           AND (d BETWEEN '2026-06-01'::DATE AND '2026-06-10'::DATE) THEN
+          is_on_leave := true;
+        END IF;
+
+        -- Baja médica de Sofía Morales (4 de junio al 8 de junio de 2026 - ¡cubre hoy!)
+        IF (emp_email = 'sofia.morales@martinez-sa.com') 
+           AND (d BETWEEN '2026-06-04'::DATE AND '2026-06-08'::DATE) THEN
+          is_on_leave := true;
+        END IF;
+
+        -- Baja médica pasada de Pedro Jiménez (9 de febrero al 13 de febrero de 2026)
+        IF (emp_email IN ('pedro.jimenez@martinez-sa.com', 'empleado.demo@fycheo-demo.com')) 
+           AND (d BETWEEN '2026-02-09'::DATE AND '2026-02-13'::DATE) THEN
+          is_on_leave := true;
+        END IF;
+
+        -- 3. Calcular turno rotativo semanal
+        week_index := EXTRACT(WEEK FROM d)::int;
+        shift_index := (week_index + emp_idx) % 3;
+
+        IF shift_index = 0 THEN
+          -- Turno Mañana
+          sh_color := '#3b82f6'; sh_start := '06:00'; sh_end := '14:00';
+          ci_h := 6; co_h := 14; br_s_h := 10; br_e_h := 10;
+          ci_m := 0; co_m := 0; br_s_m := 0; br_e_m := 30;
+        ELSIF shift_index = 1 THEN
+          -- Turno Tarde
+          sh_color := '#f59e0b'; sh_start := '14:00'; sh_end := '22:00';
+          ci_h := 14; co_h := 22; br_s_h := 18; br_e_h := 18;
+          ci_m := 0; co_m := 0; br_s_m := 0; br_e_m := 30;
+        ELSE
+          -- Jornada Completa
+          sh_color := '#10b981'; sh_start := '08:00'; sh_end := '17:00';
+          ci_h := 8; co_h := 17; br_s_h := 13; br_e_h := 14;
+          ci_m := 0; co_m := 0; br_s_m := 0; br_e_m := 0;
+        END IF;
+
+        -- Determinar estado del turno
+        IF is_holiday OR is_on_leave THEN
+          sh_status := 'absent';
+        ELSIF d < '2026-06-04'::DATE THEN
+          sh_status := 'completed';
+        ELSE
+          sh_status := 'scheduled';
+        END IF;
+
+        -- Insertar turno
+        INSERT INTO public.shifts (employee_id, company_id, date, start_time, end_time, color, status, is_published)
+        VALUES (emp, company_uuid, d, sh_start, sh_end, sh_color, sh_status, true);
+
+        -- Generar fichajes en el pasado / hoy
+        IF NOT is_holiday AND NOT is_on_leave THEN
+          IF d < '2026-06-04'::DATE THEN
+            -- Días pasados completos
+            t_ci := (d::TEXT || ' ' || LPAD(ci_h::TEXT, 2, '0') || ':00:00 Europe/Madrid')::TIMESTAMPTZ + (floor(random() * 21 - 10)::int || ' minutes')::INTERVAL;
+            t_bs := (d::TEXT || ' ' || LPAD(br_s_h::TEXT, 2, '0') || ':00:00 Europe/Madrid')::TIMESTAMPTZ + (floor(random() * 15)::int || ' minutes')::INTERVAL;
+            t_be := t_bs + (br_e_h - br_s_h || ' hours')::INTERVAL + (br_e_m - br_s_m || ' minutes')::INTERVAL + (floor(random() * 6 - 3)::int || ' minutes')::INTERVAL;
+            t_co := (d::TEXT || ' ' || LPAD(co_h::TEXT, 2, '0') || ':00:00 Europe/Madrid')::TIMESTAMPTZ + (floor(random() * 21 - 10)::int || ' minutes')::INTERVAL;
+
+            INSERT INTO public.time_entries (user_id, company_id, entry_type, occurred_at, status, description, date, entry_time, minutes, is_manual) VALUES
+              (emp, company_uuid, 'clock-in',    t_ci, 'approved', 'Entrada',         d, to_char(t_ci, 'HH24:MI'), 0, false),
+              (emp, company_uuid, 'break-start', t_bs, 'approved', 'Inicio descanso', d, to_char(t_bs, 'HH24:MI'), 0, false),
+              (emp, company_uuid, 'break-end',   t_be, 'approved', 'Fin descanso',    d, to_char(t_be, 'HH24:MI'), 0, false),
+              (emp, company_uuid, 'clock-out',   t_co, 'approved', 'Salida',          d, to_char(t_co, 'HH24:MI'), (EXTRACT(EPOCH FROM (t_co - t_ci))/60 - EXTRACT(EPOCH FROM (t_be - t_bs))/60)::integer, false);
+          ELSIF d = '2026-06-04'::DATE THEN
+            -- Hoy: Fichajes parciales basados en la hora actual (11:23)
+            -- Turno de Mañana (06:00 - 14:00): clock-in, break-start y break-end ya ocurrieron
+            IF shift_index = 0 THEN
+              t_ci := (d::TEXT || ' 06:00:00 Europe/Madrid')::TIMESTAMPTZ + (floor(random() * 11 - 5)::int || ' minutes')::INTERVAL;
+              t_bs := (d::TEXT || ' 10:00:00 Europe/Madrid')::TIMESTAMPTZ + (floor(random() * 10)::int || ' minutes')::INTERVAL;
+              t_be := t_bs + '30 minutes'::INTERVAL + (floor(random() * 4 - 2)::int || ' minutes')::INTERVAL;
+
+              INSERT INTO public.time_entries (user_id, company_id, entry_type, occurred_at, status, description, date, entry_time, minutes, is_manual) VALUES
+                (emp, company_uuid, 'clock-in',    t_ci, 'approved', 'Entrada',         d, to_char(t_ci, 'HH24:MI'), 0, false),
+                (emp, company_uuid, 'break-start', t_bs, 'approved', 'Inicio descanso', d, to_char(t_bs, 'HH24:MI'), 0, false),
+                (emp, company_uuid, 'break-end',   t_be, 'approved', 'Fin descanso',    d, to_char(t_be, 'HH24:MI'), 0, false);
+            -- Turno de Jornada Completa (08:00 - 17:00): clock-in ya ocurrió
+            ELSIF shift_index = 2 THEN
+              t_ci := (d::TEXT || ' 08:00:00 Europe/Madrid')::TIMESTAMPTZ + (floor(random() * 11 - 5)::int || ' minutes')::INTERVAL;
+
+              INSERT INTO public.time_entries (user_id, company_id, entry_type, occurred_at, status, description, date, entry_time, minutes, is_manual) VALUES
+                (emp, company_uuid, 'clock-in',    t_ci, 'approved', 'Entrada',         d, to_char(t_ci, 'HH24:MI'), 0, false);
+            -- Turno de Tarde (14:00 - 22:00): aún no entra
+            END IF;
+          END IF;
+        END IF;
+
+      END IF;
       d := d + 1;
     END LOOP;
   END LOOP;
 
-  RAISE NOTICE 'Turnos y fichajes generados correctamente.';
+  RAISE NOTICE 'Turnos y fichajes para todo 2026 generados con éxito.';
 END $$;

@@ -1,7 +1,8 @@
 // src/lib/date-adjuster.ts
 
 // La fecha y hora del último registro conocido en la base de datos de la demo.
-const DEMO_END_DATE = new Date('2026-05-29T20:10:00.000Z');
+// Alineado con la fecha de generación de "hoy" en el seed DEMO_COMPLETO.sql
+const DEMO_END_DATE = new Date('2026-06-04T20:10:00.000Z');
 
 // Offset en milisegundos (para timestamps ISO con precisión)
 const now = new Date();
@@ -11,7 +12,12 @@ const offset = now.getTime() - DEMO_END_DATE.getTime();
 // Usa fechas locales para que sea estable durante todo el día sin importar la hora
 const _demoEndLocal = new Date(DEMO_END_DATE.toDateString());
 const _todayLocal   = new Date(now.toDateString());
-const DAYS_OFFSET   = Math.round((_todayLocal.getTime() - _demoEndLocal.getTime()) / 86400000);
+const rawOffset     = Math.round((_todayLocal.getTime() - _demoEndLocal.getTime()) / 86400000);
+
+// Forzar que el desfase sea siempre múltiplo de 7 días.
+// Esto garantiza que el día de la semana en la UI coincida exactamente con la base de datos,
+// impidiendo que los fines de semana (sábados y domingos libres) se desplacen a otros días.
+export const DAYS_OFFSET = Math.round(rawOffset / 7) * 7;
 
 /**
  * Ajusta una cadena de fecha ISO sumándole el desfase calculado.

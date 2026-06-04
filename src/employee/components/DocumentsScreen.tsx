@@ -53,6 +53,10 @@ export default function DocumentsScreen() {
   const [previewUrl, setPreviewUrl]   = useState<string | null>(null);
   const [previewDoc, setPreviewDoc]   = useState<EmployeeDocument | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
+  const [demoToast, setDemoToast] = useState(false);
+
+  // Detecta si la URL del documento es una ruta ficticia de demo (no existe en storage)
+  const isFakeUrl = (url: string) => !url.startsWith('http://') && !url.startsWith('https://');
 
   // Fetch company
   useEffect(() => {
@@ -77,9 +81,15 @@ export default function DocumentsScreen() {
   }, [user?.id, companyId]);
 
   const handleOpen = async (doc: EmployeeDocument) => {
+    // Documento ficticio de demo → mostrar toast informativo
+    if (isFakeUrl(doc.file_url)) {
+      setDemoToast(true);
+      setTimeout(() => setDemoToast(false), 3000);
+      return;
+    }
     setDownloading(doc.id);
     try {
-      const url = await documentService.getDownloadUrl(doc.file_url);
+      const url = await documentService.getDownloadUrl(doc.file_url, doc.document_type);
       window.open(url, '_blank');
     } catch {
       alert('No se pudo abrir el documento.');
@@ -89,14 +99,19 @@ export default function DocumentsScreen() {
   };
 
   const handlePreview = async (doc: EmployeeDocument) => {
-    setLoadingPreview(true);
     setPreviewDoc(doc);
+    // Documento ficticio de demo → abrir visor de demo directamente sin petición de red
+    if (isFakeUrl(doc.file_url)) {
+      setPreviewUrl('demo');
+      return;
+    }
+    setLoadingPreview(true);
     try {
-      const url = await documentService.getDownloadUrl(doc.file_url);
+      const url = await documentService.getDownloadUrl(doc.file_url, doc.document_type);
       setPreviewUrl(url);
     } catch {
-      alert('No se pudo cargar el documento.');
-      setPreviewDoc(null);
+      // Fallback al visor de demo si falla
+      setPreviewUrl('demo');
     } finally {
       setLoadingPreview(false);
     }
@@ -232,39 +247,228 @@ export default function DocumentsScreen() {
         ))}
       </main>
 
-      {/* Visor PDF */}
-      <div className={`fixed inset-0 z-50 flex flex-col bg-black/80 backdrop-blur-sm transition-all duration-300 ${previewDoc && previewUrl ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
-        {/* Header */}
-        <div className="flex items-center gap-3 px-4 py-3 bg-[#151b26] border-b border-white/10 shrink-0">
-          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
-            <span className="material-symbols-outlined text-[18px]">description</span>
+      {/* Toast demo */}
+      {demoToast && (
+        <div style={{
+          position: 'fixed', bottom: 90, left: '50%', transform: 'translateX(-50%)',
+          background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff',
+          padding: '10px 20px', borderRadius: 14, fontSize: 13, fontWeight: 600,
+          zIndex: 100, boxShadow: '0 8px 30px rgba(99,102,241,0.4)',
+          display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap',
+        }}>
+          <span className="material-symbols-outlined" style={{ fontSize: 16 }}>info</span>
+          Entorno de demo · Descarga no disponible
+        </div>
+      )}
+
+      {/* Visor de documento */}
+      <div className={`fixed inset-0 z-50 flex flex-col transition-all duration-300 ${
+        previewDoc ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+      }`} style={{ background: 'rgba(6,10,22,0.97)', backdropFilter: 'blur(8px)' }}>
+
+        {/* Header del visor */}
+        <div className="flex items-center gap-3 px-4 py-3 shrink-0" style={{ background: 'rgba(15,23,42,0.95)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: 'rgba(99,102,241,0.15)' }}>
+            <span className="material-symbols-outlined text-[18px]" style={{ color: '#818cf8' }}>
+              {TYPE_ICONS[previewDoc?.document_type ?? ''] || 'description'}
+            </span>
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-bold text-white truncate">{previewDoc?.title}</p>
-            <p className="text-[10px] text-slate-400 uppercase tracking-wider">Visor seguro de documentos</p>
+            <p className="text-[10px] uppercase tracking-wider" style={{ color: '#475569' }}>Visor seguro de documentos</p>
           </div>
-          <button
-            onClick={() => previewDoc && handleOpen(previewDoc)}
-            className="flex items-center gap-1 px-3 py-1.5 bg-white/5 hover:bg-white/10 text-white rounded-lg text-xs font-semibold transition-colors"
-          >
-            <span className="material-symbols-outlined text-[16px]">download</span>
-            Descargar
-          </button>
+          {previewDoc && isFakeUrl(previewDoc.file_url) ? (
+            <button
+              onClick={() => { setDemoToast(true); setTimeout(() => setDemoToast(false), 3000); }}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+              style={{ background: 'rgba(99,102,241,0.12)', color: '#818cf8', border: '1px solid rgba(99,102,241,0.2)' }}
+            >
+              <span className="material-symbols-outlined text-[16px]">download</span>
+              Descargar
+            </button>
+          ) : (
+            <button
+              onClick={() => previewDoc && handleOpen(previewDoc)}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+              style={{ background: 'rgba(255,255,255,0.05)', color: '#fff' }}
+            >
+              <span className="material-symbols-outlined text-[16px]">download</span>
+              Descargar
+            </button>
+          )}
           <button
             onClick={closePreview}
-            className="w-9 h-9 flex items-center justify-center bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white rounded-xl transition-colors"
+            className="w-9 h-9 flex items-center justify-center rounded-xl transition-colors"
+            style={{ background: 'rgba(255,255,255,0.05)', color: '#64748b' }}
           >
             <span className="material-symbols-outlined text-[20px]">close</span>
           </button>
         </div>
-        {/* Iframe */}
-        {previewUrl && (
+
+        {/* Contenido del visor */}
+        {previewDoc && previewUrl === 'demo' ? (
+          // ── Visor A4 de demo ────────────────────────────────────────────────
+          <div className="flex-1 overflow-y-auto" style={{ background: '#1a1f2e', padding: '20px 12px 40px' }}>
+            {/* Hoja A4 */}
+            <div style={{
+              maxWidth: 480, margin: '0 auto',
+              background: '#fff',
+              borderRadius: 3,
+              boxShadow: '0 8px 40px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.3)',
+              padding: '32px 28px',
+              fontFamily: '"Times New Roman", Times, serif',
+              color: '#1a1a1a',
+              minHeight: 640,
+              position: 'relative',
+            }}>
+
+              {/* Marca de agua DEMO */}
+              <div style={{
+                position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                pointerEvents: 'none', overflow: 'hidden', borderRadius: 3,
+              }}>
+                <span style={{
+                  fontSize: 90, fontWeight: 900, color: 'rgba(99,102,241,0.06)',
+                  transform: 'rotate(-35deg)', whiteSpace: 'nowrap', userSelect: 'none',
+                  fontFamily: 'Arial, sans-serif', letterSpacing: 12,
+                }}>DEMO</span>
+              </div>
+
+              {/* Cabecera empresa */}
+              <div style={{ borderBottom: '2px solid #1e3a8a', paddingBottom: 14, marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                  <p style={{ fontWeight: 800, fontSize: 15, color: '#1e3a8a', fontFamily: 'Arial, sans-serif', letterSpacing: '-0.3px' }}>
+                    DISTRIBUCIONES MARTÍNEZ S.A.
+                  </p>
+                  <p style={{ fontSize: 9, color: '#64748b', marginTop: 2, fontFamily: 'Arial, sans-serif' }}>
+                    Calle Mayor 45, 28001 Madrid · CIF B-12345678
+                  </p>
+                  <p style={{ fontSize: 9, color: '#64748b', fontFamily: 'Arial, sans-serif' }}>
+                    Tel: +34 91 000 00 00 · info@martinez-sa.com
+                  </p>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <p style={{ fontSize: 9, color: '#94a3b8', fontFamily: 'Arial, sans-serif' }}>
+                    Madrid, {new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' })}
+                  </p>
+                  <p style={{ fontSize: 9, color: '#94a3b8', fontFamily: 'Arial, sans-serif', marginTop: 2 }}>
+                    Ref: {previewDoc.document_type.toUpperCase()}-2026-{Math.floor(Math.random() * 900 + 100)}
+                  </p>
+                </div>
+              </div>
+
+              {/* Título del documento */}
+              <div style={{ textAlign: 'center', marginBottom: 22 }}>
+                <p style={{ fontWeight: 700, fontSize: 14, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: 'Arial, sans-serif' }}>
+                  {previewDoc.title}
+                </p>
+                {previewDoc.period && (
+                  <p style={{ fontSize: 10, color: '#64748b', marginTop: 4, fontFamily: 'Arial, sans-serif' }}>
+                    Período: {formatPeriod(previewDoc.period)}
+                  </p>
+                )}
+              </div>
+
+              {/* Datos del empleado */}
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 4, padding: '10px 14px', marginBottom: 18, fontSize: 10, fontFamily: 'Arial, sans-serif' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px' }}>
+                  <p><strong>Empleado:</strong> Pedro Jiménez Ruiz</p>
+                  <p><strong>DNI:</strong> 45.678.901-D</p>
+                  <p><strong>Puesto:</strong> Repartidor</p>
+                  <p><strong>Departamento:</strong> Repartidores</p>
+                  <p><strong>N.º SS:</strong> 28/001/01</p>
+                  <p><strong>Categoría:</strong> Grupo II</p>
+                </div>
+              </div>
+
+              {/* Contenido según tipo */}
+              {previewDoc.document_type === 'nomina' && (
+                <>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 9, fontFamily: 'Arial, sans-serif', marginBottom: 14 }}>
+                    <thead>
+                      <tr style={{ background: '#1e3a8a', color: '#fff' }}>
+                        <th style={{ padding: '5px 8px', textAlign: 'left' }}>Concepto</th>
+                        <th style={{ padding: '5px 8px', textAlign: 'right' }}>Devengos</th>
+                        <th style={{ padding: '5px 8px', textAlign: 'right' }}>Deducciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[
+                        ['Salario base', '1.600,00 €', ''],
+                        ['Plus transporte', '150,00 €', ''],
+                        ['Plus productividad', '120,00 €', ''],
+                        ['IRPF (15%)', '', '279,00 €'],
+                        ['Seg. Social (6,35%)', '', '119,02 €'],
+                      ].map(([c, d, ded], i) => (
+                        <tr key={i} style={{ borderBottom: '1px solid #f1f5f9', background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
+                          <td style={{ padding: '4px 8px' }}>{c}</td>
+                          <td style={{ padding: '4px 8px', textAlign: 'right', color: '#16a34a' }}>{d}</td>
+                          <td style={{ padding: '4px 8px', textAlign: 'right', color: '#dc2626' }}>{ded}</td>
+                        </tr>
+                      ))}
+                      <tr style={{ background: '#f1f5f9', fontWeight: 700 }}>
+                        <td style={{ padding: '5px 8px' }}>TOTAL LÍQUIDO A PERCIBIR</td>
+                        <td style={{ padding: '5px 8px', textAlign: 'right' }}>1.870,00 €</td>
+                        <td style={{ padding: '5px 8px', textAlign: 'right', color: '#dc2626' }}>398,02 €</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <div style={{ textAlign: 'right', fontWeight: 800, fontSize: 13, color: '#1e3a8a', fontFamily: 'Arial, sans-serif', borderTop: '2px solid #1e3a8a', paddingTop: 8 }}>
+                    NETO: 1.471,98 €
+                  </div>
+                </>
+              )}
+
+              {previewDoc.document_type === 'contrato' && (
+                <div style={{ fontSize: 10, lineHeight: 1.7, color: '#374151', fontFamily: 'Arial, sans-serif' }}>
+                  <p style={{ marginBottom: 10 }}>En Madrid, a 2 de enero de 2026, de una parte <strong>Distribuciones Martínez S.A.</strong>, representada por D. Carlos Martínez García, y de otra parte D. <strong>Pedro Jiménez Ruiz</strong>, con DNI 45.678.901-D, acuerdan suscribir el presente <strong>CONTRATO DE TRABAJO INDEFINIDO</strong> con arreglo a las siguientes cláusulas:</p>
+                  <p style={{ marginBottom: 6 }}><strong>PRIMERA.</strong> El trabajador prestará sus servicios como Repartidor, en el centro de trabajo situado en Calle Mayor 45, 28001 Madrid.</p>
+                  <p style={{ marginBottom: 6 }}><strong>SEGUNDA.</strong> La jornada de trabajo será de 40 horas semanales, distribuidas de lunes a viernes.</p>
+                  <p style={{ marginBottom: 6 }}><strong>TERCERA.</strong> El salario bruto anual será de 22.440,00 € brutos anuales, distribuidos en 14 pagas.</p>
+                  <p><strong>CUARTA.</strong> El presente contrato se rige por el Convenio Colectivo del Sector de Transporte de Mercancías.</p>
+                </div>
+              )}
+
+              {(previewDoc.document_type === 'certificado' || previewDoc.document_type === 'otro') && (
+                <div style={{ fontSize: 10, lineHeight: 1.8, color: '#374151', fontFamily: 'Arial, sans-serif' }}>
+                  <p style={{ marginBottom: 14 }}><strong>D. Carlos Martínez García</strong>, en calidad de Administrador de la mercantil <strong>Distribuciones Martínez S.A.</strong>, con CIF B-12345678,</p>
+                  <p style={{ marginBottom: 14, textTransform: 'uppercase', fontWeight: 700, textAlign: 'center', fontSize: 11 }}>CERTIFICA</p>
+                  <p style={{ marginBottom: 10 }}>Que D. <strong>Pedro Jiménez Ruiz</strong>, con DNI 45.678.901-D, presta sus servicios en esta empresa desde el 1 de junio de 2025, en el puesto de <strong>Repartidor</strong>, con carácter indefinido y a jornada completa.</p>
+                  <p>Y para que conste a los efectos oportunos, expido el presente certificado en Madrid, a {new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' })}.</p>
+                </div>
+              )}
+
+              {/* Firma */}
+              <div style={{ marginTop: 32, display: 'flex', justifyContent: 'space-between', fontSize: 9, fontFamily: 'Arial, sans-serif', color: '#64748b' }}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ width: 110, borderTop: '1px solid #94a3b8', paddingTop: 4, marginTop: 28 }}>
+                    <p>El Empleado</p>
+                    <p style={{ fontWeight: 700, color: '#374151' }}>Pedro Jiménez Ruiz</p>
+                  </div>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ width: 110, borderTop: '1px solid #94a3b8', paddingTop: 4, marginTop: 28 }}>
+                    <p>La Empresa</p>
+                    <p style={{ fontWeight: 700, color: '#374151' }}>Carlos Martínez García</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Pie */}
+              <div style={{ marginTop: 24, paddingTop: 10, borderTop: '1px solid #f1f5f9', textAlign: 'center', fontSize: 8, color: '#94a3b8', fontFamily: 'Arial, sans-serif' }}>
+                Documento generado por Fycheo · Datos ficticios de demo · Ningún dato es real
+              </div>
+            </div>
+          </div>
+        ) : previewUrl ? (
+          // ── Iframe para documentos reales ──────────────────────────────────
           <iframe
             src={`${previewUrl}#toolbar=0&navpanes=0`}
-            className="flex-1 w-full border-0 bg-slate-900"
+            className="flex-1 w-full border-0"
+            style={{ background: '#1e2942' }}
             title="Visor PDF"
           />
-        )}
+        ) : null}
       </div>
     </div>
   );

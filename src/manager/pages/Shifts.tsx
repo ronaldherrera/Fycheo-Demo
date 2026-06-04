@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, Fragment, useLayoutEffect, useCallback, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { Calendar, Plus, ChevronLeft, ChevronRight, Clock, User, ChevronDown, Copy, CalendarDays, Save, Download, Trash2, Minus, Loader2, Check, FileText, Undo, Redo, Users, AlertTriangle, CalendarOff, Palmtree, Stethoscope } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { CustomSelect } from '../components/ui/CustomSelect';
@@ -2047,7 +2048,10 @@ const Shifts = () => {
                     }));
                   }}
                 >
-                  <div className={`w-2 h-8 rounded-full ${mapLegacyColor(shift.color)}`}></div>
+                  <div
+                    className={`w-2 h-8 rounded-full shrink-0 ${(!shift.color || shift.color.startsWith('#')) ? '' : mapLegacyColor(shift.color)}`}
+                    style={shift.color && shift.color.startsWith('#') ? { backgroundColor: shift.color } : undefined}
+                  />
                   <div className="pr-2">
                     <p className="text-sm font-medium text-white group-hover:text-primary transition-colors leading-none">{shift.name}</p>
                     <p className="text-[10px] text-slate-400 mt-1.5 font-medium">
@@ -2495,15 +2499,21 @@ const Shifts = () => {
                                   <span className="w-1 h-1 rounded-full bg-current" />
                                 </div>
 
-                                <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-slate-300 border border-white/10 flex-shrink-0">
-                                  <User size={14} />
-                                </div>
-                                <div className="truncate flex-1">
-                                  <h3 className="text-white text-sm font-medium truncate">{empName}</h3>
-                                  <p className="text-xs text-slate-500 mt-0.5 truncate">
-                                    {totalHours > 0 ? `${formatProposedHours(totalHours)} propuestas` : 'Sin turno'}
-                                  </p>
-                                </div>
+                                <Link to={`/manager/equipos/trabajador/${emp.id}`} className="flex items-center gap-2 min-w-0 flex-1 hover:text-primary transition-colors">
+                                  <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-slate-300 border border-white/10 flex-shrink-0 overflow-hidden">
+                                    {emp.avatar ? (
+                                      <img src={emp.avatar} alt="" className="w-full h-full object-cover" />
+                                    ) : (
+                                      <User size={14} />
+                                    )}
+                                  </div>
+                                  <div className="truncate flex-1">
+                                    <h3 className="text-white text-sm font-medium truncate group-hover:text-primary transition-colors">{empName}</h3>
+                                    <p className="text-xs text-slate-500 mt-0.5 truncate">
+                                      {totalHours > 0 ? `${formatProposedHours(totalHours)} propuestas` : 'Sin turno'}
+                                    </p>
+                                  </div>
+                                </Link>
                               </div>
 
                               {/* Timeline Area */}
@@ -2777,18 +2787,28 @@ const Shifts = () => {
 
                                     const mappedColor = rawColor ? mapLegacyColor(rawColor) : null;
                                     if (mappedColor) {
-                                      const clean = mappedColor.replace('bg-', '').replace('-500', '').replace('-600', '').replace('-400', '').replace('-300', '').replace('-800', '');
-                                      if (clean.includes('emerald')) colorKey = 'emerald';
-                                      else if (clean.includes('yellow')) colorKey = 'yellow';
-                                      else if (clean.includes('orange')) colorKey = 'orange';
-                                      else if (clean.includes('purple') || clean.includes('indigo')) colorKey = 'purple';
-                                      else if (clean.includes('cyan')) colorKey = 'cyan';
-                                      else if (clean.includes('pink') || clean.includes('fuchsia')) colorKey = 'pink';
-                                      else if (clean.includes('amber')) colorKey = 'amber';
-                                      else if (clean.includes('slate')) colorKey = 'slate';
-                                      else if (clean.includes('lime')) colorKey = 'lime';
-                                      else if (clean.includes('red')) colorKey = 'red';
-                                      else colorKey = 'blue';
+                                      const clean = mappedColor.replace('bg-', '').replace('-500', '').replace('-600', '').replace('-400', '').replace('-300', '').replace('-800', '').toLowerCase();
+                                      if (clean === '#3b82f6') {
+                                        colorKey = 'blue';
+                                      } else if (clean === '#f59e0b') {
+                                        colorKey = 'orange';
+                                      } else if (clean === '#10b981') {
+                                        colorKey = 'emerald';
+                                      } else if (clean === '#ef4444') {
+                                        colorKey = 'red';
+                                      } else {
+                                        if (clean.includes('emerald') || clean.includes('green') || clean.includes('#10b981')) colorKey = 'emerald';
+                                        else if (clean.includes('yellow') || clean.includes('#f59e0b')) colorKey = 'yellow';
+                                        else if (clean.includes('orange')) colorKey = 'orange';
+                                        else if (clean.includes('purple') || clean.includes('indigo') || clean.includes('violet')) colorKey = 'purple';
+                                        else if (clean.includes('cyan') || clean.includes('sky')) colorKey = 'cyan';
+                                        else if (clean.includes('pink') || clean.includes('fuchsia')) colorKey = 'pink';
+                                        else if (clean.includes('amber')) colorKey = 'amber';
+                                        else if (clean.includes('slate')) colorKey = 'slate';
+                                        else if (clean.includes('lime')) colorKey = 'lime';
+                                        else if (clean.includes('red') || clean.includes('#ef4444')) colorKey = 'red';
+                                        else colorKey = 'blue';
+                                      }
                                     } else if (shift.status === 'completed') {
                                       colorKey = 'emerald';
                                     } else if (shift.status === 'absent') {
@@ -3460,13 +3480,17 @@ const Shifts = () => {
               >
                 {/* Cabecera del Empleado */}
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary text-xs font-bold shrink-0">
-                      {empName.slice(0, 2).toUpperCase()}
+                  <Link to={`/manager/equipos/trabajador/${employee.id}`} className="flex items-center gap-2.5 min-w-0 hover:text-primary transition-colors">
+                    <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary text-xs font-bold shrink-0 overflow-hidden">
+                      {employee.avatar ? (
+                        <img src={employee.avatar} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        empName.slice(0, 2).toUpperCase()
+                      )}
                     </div>
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
-                        <p className="font-semibold text-sm text-white truncate">{empName}</p>
+                        <p className="font-semibold text-sm text-white truncate group-hover:text-primary transition-colors">{empName}</p>
                         {hasOvertimeAlert && (
                           <span title="Supera las 40h semanales" className="text-red-500 shrink-0 cursor-help">
                             <AlertTriangle size={14} />
@@ -3480,7 +3504,7 @@ const Shifts = () => {
                       </div>
                       <p className="text-[10px] text-slate-500 capitalize">{employee.role || 'Personal'}</p>
                     </div>
-                  </div>
+                  </Link>
                   <div className="text-right shrink-0">
                     <span className="text-sm font-extrabold text-white">{formatProposedHours(totalHours)}</span>
                     <p className="text-[8px] text-slate-500 uppercase tracking-wider">propuestas</p>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { Users, Clock, CalendarOff, User, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Check, X, ClipboardList, LogIn, LogOut, Coffee, ArrowUpDown, MessageCircle } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -201,7 +202,30 @@ const Dashboard = () => {
     Promise.all([
       teamService.getTeams(activeCompany.id),
       employeeService.getEmployees(activeCompany.id)
-    ]).then(([t, e]) => { setTeams(t); setEmployees(e); }).catch(console.error);
+    ]).then(([t, e]) => {
+      setTeams(t);
+      setEmployees(e);
+      
+      // Auto-selección y limpieza de filtros obsoletos si el targetId no existe o está vacío
+      setFilters(prev => {
+        let nextTargetId = prev.targetId;
+        if (prev.scope === 'team') {
+          const teamExists = t.some(team => team.id === prev.targetId);
+          if (!teamExists) {
+            nextTargetId = t.length > 0 ? t[0].id : '';
+          }
+        } else if (prev.scope === 'employee') {
+          const empExists = e.some(emp => emp.id === prev.targetId);
+          if (!empExists) {
+            nextTargetId = e.length > 0 ? e[0].id : '';
+          }
+        }
+        if (nextTargetId !== prev.targetId) {
+          return { ...prev, targetId: nextTargetId };
+        }
+        return prev;
+      });
+    }).catch(console.error);
   }, [activeCompany]);
 
   // ── Dashboard data ───────────────────────────────────────────────────────
@@ -611,14 +635,14 @@ const Dashboard = () => {
                      onMouseLeave={handleMouseLeave}
                 >
                   {/* Avatar y Nombre */}
-                  <div className="w-[100px] shrink-0 flex items-center gap-2">
+                  <Link to={`/manager/equipos/trabajador/${emp.userId}`} className="w-[100px] shrink-0 flex items-center gap-2 hover:text-primary transition-colors min-w-0">
                     <div className="w-7 h-7 rounded-full bg-slate-800 flex items-center justify-center overflow-hidden shrink-0 border border-white/5">
                       {emp.avatar_url
                         ? <img src={emp.avatar_url} alt="" className="w-full h-full object-cover" />
                         : <span className="text-[11px] font-bold text-slate-400 uppercase">{emp.name.charAt(0)}</span>
                       }
                     </div>
-                    <div className="flex flex-col min-w-0">
+                    <div className="flex flex-col min-w-0 flex-1">
                       <span className="text-xs text-slate-300 font-medium truncate" title={emp.name}>{emp.name.split(' ')[0]}</span>
                       {(emp.scheduled?.name || emp.isPartida) && (
                         <span className="text-[8px] font-bold text-primary/70 uppercase tracking-wider leading-none mt-0.5">
@@ -626,7 +650,7 @@ const Dashboard = () => {
                         </span>
                       )}
                     </div>
-                  </div>
+                  </Link>
 
                   {/* Timeline Barra */}
                   <div className="relative flex-1 h-10 rounded-xl overflow-hidden border border-white/5 bg-slate-900/40">
@@ -1011,15 +1035,15 @@ const Dashboard = () => {
               <ul className="space-y-3 overflow-y-auto custom-scrollbar pr-2">
                 {data.presentEmployees.map((emp: any) => (
                   <li key={emp.id} className="flex items-center justify-between p-2 bg-white/5 hover:bg-white/10 transition-colors rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center overflow-hidden">
+                    <Link to={`/manager/equipos/trabajador/${emp.id}`} className="flex items-center gap-3 hover:text-primary transition-colors min-w-0">
+                      <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center overflow-hidden shrink-0">
                         {emp.avatar_url ? <img src={emp.avatar_url} alt="" className="w-full h-full object-cover" /> : <User size={16} className="text-slate-400" />}
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <p className="font-semibold text-slate-200 text-sm leading-tight truncate max-w-[120px]">{emp.employeeName}</p>
                         <p className="text-[10px] text-slate-500">{emp.startTime?.substring(0, 5)}</p>
                       </div>
-                    </div>
+                    </Link>
                     <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
                   </li>
                 ))}

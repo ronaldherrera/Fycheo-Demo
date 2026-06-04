@@ -242,6 +242,68 @@ const DashboardScreen: React.FC = () => {
   // Conteo de compañeros trabajando ahora
   const [workingCount, setWorkingCount] = useState(0);
 
+  // ── Listener persistente de mensajes no leídos (siempre activo) ──────────
+  // Carga el total inicial y se suscribe a cambios aunque el ChatPanel esté cerrado.
+  useEffect(() => {
+    if (!user?.id || !activeCompanyId) return;
+
+    // Carga inicial: cuántos mensajes sin leer hay para este usuario
+    const loadInitialUnread = async () => {
+      const { count } = await supabase
+        .from('ephemeral_messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('receiver_id', user.id)
+        .eq('company_id', activeCompanyId)
+        .is('read_at', null);
+      setUnreadChatCount(count ?? 0);
+    };
+    loadInitialUnread();
+
+    // Suscripción realtime: +1 al llegar un mensaje nuevo (cuando el panel está cerrado)
+    const channel = supabase
+      .channel(`dashboard:chat:unread:${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'ephemeral_messages',
+          filter: `receiver_id=eq.${user.id}`,
+        },
+        () => {
+          // Solo incrementar si el ChatPanel NO está abierto (si está abierto, él gestiona los mensajes)
+          setShowChatPanel(open => {
+            if (!open) setUnreadChatCount(prev => prev + 1);
+            return open;
+          });
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'ephemeral_messages',
+          filter: `receiver_id=eq.${user.id}`,
+        },
+        () => {
+          // Al borrar (leer) mensajes, recalcular el total real
+          supabase
+            .from('ephemeral_messages')
+            .select('id', { count: 'exact', head: true })
+            .eq('receiver_id', user.id)
+            .eq('company_id', activeCompanyId)
+            .is('read_at', null)
+            .then(({ count }) => setUnreadChatCount(count ?? 0));
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [user?.id, activeCompanyId]);
+
+
+
   // --- Funciones controladas para paneles con desenfoque de teclado (blur) ---
   const closeChatPanel = () => {
     if (document.activeElement instanceof HTMLElement) {
@@ -417,15 +479,16 @@ const DashboardScreen: React.FC = () => {
   const loadWorkingCount = useCallback(() => {
     if (!user?.id || !activeCompanyId) return;
 
-    const today = new Date().toISOString().slice(0, 10);
+    // Usar la fecha "demo" ajustada (el sistema demo puede simular otra fecha)
+    const demoToday = deAdjustISOString(new Date().toISOString()).slice(0, 10);
 
     supabase
       .from('time_entries')
       .select('user_id, entry_type')
       .eq('company_id', activeCompanyId)
-      .gte('created_at', today + 'T00:00:00')
+      .eq('date', demoToday)
       .neq('user_id', user.id)
-      .order('created_at', { ascending: false })
+      .order('occurred_at', { ascending: false })
       .then(({ data }) => {
         if (!data) return;
         // Keep only last entry per user

@@ -55,6 +55,19 @@ const colorClasses = (c: "primary" | "slate" | "amber" | "emerald" | "pink") => 
 
 const getShiftStyle = (color: string | undefined | null) => {
   let c = color || '';
+  if (c.startsWith('#')) {
+    const hex = c.toLowerCase();
+    if (hex.startsWith('#3b8') || hex.startsWith('#256') || hex.startsWith('#1d4') || hex.startsWith('#60a')) c = 'blue';
+    else if (hex.startsWith('#10b') || hex.startsWith('#34d') || hex.startsWith('#059') || hex.startsWith('#047')) c = 'emerald';
+    else if (hex.startsWith('#f59') || hex.startsWith('#fbb') || hex.startsWith('#d97') || hex.startsWith('#b45') || hex.startsWith('#f97')) c = 'orange';
+    else if (hex.startsWith('#ef4') || hex.startsWith('#f87') || hex.startsWith('#dc2') || hex.startsWith('#b91')) c = 'red';
+    else if (hex.startsWith('#8b5') || hex.startsWith('#a78') || hex.startsWith('#7c3') || hex.startsWith('#6d2') || hex.startsWith('#4f4') || hex.startsWith('#636')) c = 'purple';
+    else if (hex.startsWith('#ec4') || hex.startsWith('#f47') || hex.startsWith('#db2') || hex.startsWith('#be1')) c = 'pink';
+    else if (hex.startsWith('#06b') || hex.startsWith('#22d') || hex.startsWith('#089') || hex.startsWith('#0e7')) c = 'cyan';
+    else if (hex.startsWith('#84c') || hex.startsWith('#a3e') || hex.startsWith('#65a') || hex.startsWith('#4d7')) c = 'lime';
+    else if (hex.startsWith('#647') || hex.startsWith('#94a') || hex.startsWith('#475') || hex.startsWith('#334')) c = 'slate';
+  }
+
   if (c.includes('indigo')) c = 'bg-purple-600';
   if (c.includes('fuchsia')) c = 'bg-pink-400';
 

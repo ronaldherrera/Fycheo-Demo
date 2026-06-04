@@ -205,6 +205,25 @@ export default function DemoShell() {
           localStorage.setItem('kiosk_demo_company_id', cid);
           localStorage.setItem('kiosk_pin', '1234');
           localStorage.setItem('kiosk_device_id', 'demo-device-001');
+
+          // Buscar el empleado de pruebas y preparar el override en el boot
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('id, full_name, email, avatar, dni_nie')
+            .eq('email', 'empleado.demo@fycheo-demo.com')
+            .maybeSingle();
+
+          if (profile) {
+            localStorage.setItem('demo_employee_override', JSON.stringify({
+              id: profile.id,
+              email: profile.email,
+              user_metadata: { full_name: profile.full_name || 'Pedro Jiménez Ruiz', avatar_url: profile.avatar || '' }
+            }));
+            if (profile.dni_nie) {
+              setKioskDni(profile.dni_nie);
+              localStorage.setItem('kiosk_demo_dni', profile.dni_nie);
+            }
+          }
         }
 
         setReady(true);
@@ -221,34 +240,34 @@ export default function DemoShell() {
   const iframeUrl = ready ? section.getUrl(companyId) : '';
 
   const handleSectionClick = async (id: SectionId) => {
+    // Verificar y actualizar en caliente el ID de la empresa del admin conectado para evitar UUIDs huérfanos tras re-seeding
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user?.id) {
+        const { data } = await supabase.from('companies').select('id').eq('owner_id', session.user.id).limit(1).maybeSingle();
+        if (data?.id && data.id !== companyId) {
+          setCompanyId(data.id);
+          localStorage.setItem('active_company_id', data.id);
+          localStorage.setItem('kiosk_demo_company_id', data.id);
+        }
+      }
+    } catch (err) {
+      console.error("Error al actualizar companyId en handleSectionClick:", err);
+    }
+
     if (id === 'employee') {
-      // Buscar directamente un employee_id con turnos publicados
-      const { data: shiftData } = await supabase
-        .from('shifts')
-        .select('employee_id')
-        .eq('company_id', companyId)
-        .eq('is_published', true)
-        .limit(1)
+      // Buscar directamente al empleado de pruebas de la demo por su correo
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, avatar')
+        .eq('email', 'empleado.demo@fycheo-demo.com')
         .maybeSingle();
 
-      const employeeId = shiftData?.employee_id;
-      if (employeeId) {
-        // Obtener su perfil desde company_members (admin tiene acceso)
-        const { data: memberData } = await supabase
-          .from('company_members')
-          .select('user_id, profiles!inner(full_name, email, avatar)')
-          .eq('company_id', companyId)
-          .eq('user_id', employeeId)
-          .maybeSingle();
-
-        const profile: any = memberData
-          ? (Array.isArray(memberData.profiles) ? memberData.profiles[0] : memberData.profiles)
-          : null;
-
+      if (profile) {
         localStorage.setItem('demo_employee_override', JSON.stringify({
-          id: employeeId,
-          email: profile?.email || 'empleado@martinez-sa.com',
-          user_metadata: { full_name: profile?.full_name || 'Empleado Demo', avatar_url: profile?.avatar || '' }
+          id: profile.id,
+          email: profile.email,
+          user_metadata: { full_name: profile.full_name || 'Pedro Jiménez Ruiz', avatar_url: profile.avatar || '' }
         }));
       }
     } else {
@@ -262,19 +281,32 @@ export default function DemoShell() {
   useEffect(() => {
     if (active !== 'kiosk' || !ready || !companyId) return;
     supabase
-      .from('company_members')
-      .select('profiles!inner(dni_nie)')
-      .eq('company_id', companyId)
-      .eq('role', 'employee')
-      .then(({ data }) => {
-        const found = (data || []).find((m: any) => {
-          const p = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles;
-          return p?.dni_nie;
-        });
-        if (found) {
-          const p = Array.isArray(found.profiles) ? found.profiles[0] : found.profiles;
-          setKioskDni(p.dni_nie);
-          localStorage.setItem('kiosk_demo_dni', p.dni_nie);
+      .from('profiles')
+      .select('dni_nie')
+      .eq('email', 'empleado.demo@fycheo-demo.com')
+      .maybeSingle()
+      .then(({ data: profile }) => {
+        if (profile?.dni_nie) {
+          setKioskDni(profile.dni_nie);
+          localStorage.setItem('kiosk_demo_dni', profile.dni_nie);
+        } else {
+          // Fallback por si no existe por correo
+          supabase
+            .from('company_members')
+            .select('profiles:user_id(dni_nie)')
+            .eq('company_id', companyId)
+            .eq('role', 'employee')
+            .then(({ data }) => {
+              const found = (data || []).find((m: any) => {
+                const p = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles;
+                return p?.dni_nie;
+              });
+              if (found) {
+                const p = Array.isArray(found.profiles) ? found.profiles[0] : found.profiles;
+                setKioskDni(p.dni_nie);
+                localStorage.setItem('kiosk_demo_dni', p.dni_nie);
+              }
+            });
         }
       });
   }, [active, ready, companyId]);

@@ -71,6 +71,19 @@ const colorClasses = (c: "primary" | "slate" | "amber" | "emerald" | "pink") => 
 
 const getShiftStyle = (color: string | undefined | null) => {
   let c = color || '';
+  if (c.startsWith('#')) {
+    const hex = c.toLowerCase();
+    if (hex.startsWith('#3b8') || hex.startsWith('#256') || hex.startsWith('#1d4') || hex.startsWith('#60a')) c = 'blue';
+    else if (hex.startsWith('#10b') || hex.startsWith('#34d') || hex.startsWith('#059') || hex.startsWith('#047')) c = 'emerald';
+    else if (hex.startsWith('#f59') || hex.startsWith('#fbb') || hex.startsWith('#d97') || hex.startsWith('#b45') || hex.startsWith('#f97')) c = 'orange';
+    else if (hex.startsWith('#ef4') || hex.startsWith('#f87') || hex.startsWith('#dc2') || hex.startsWith('#b91')) c = 'red';
+    else if (hex.startsWith('#8b5') || hex.startsWith('#a78') || hex.startsWith('#7c3') || hex.startsWith('#6d2') || hex.startsWith('#4f4') || hex.startsWith('#636')) c = 'purple';
+    else if (hex.startsWith('#ec4') || hex.startsWith('#f47') || hex.startsWith('#db2') || hex.startsWith('#be1')) c = 'pink';
+    else if (hex.startsWith('#06b') || hex.startsWith('#22d') || hex.startsWith('#089') || hex.startsWith('#0e7')) c = 'cyan';
+    else if (hex.startsWith('#84c') || hex.startsWith('#a3e') || hex.startsWith('#65a') || hex.startsWith('#4d7')) c = 'lime';
+    else if (hex.startsWith('#647') || hex.startsWith('#94a') || hex.startsWith('#475') || hex.startsWith('#334')) c = 'slate';
+  }
+
   if (c.includes('indigo')) c = 'bg-purple-600';
   if (c.includes('fuchsia')) c = 'bg-pink-400';
 
@@ -979,7 +992,14 @@ export default function KioskModeScreen() {
         .eq('id', companyId)
         .single();
         
-      if (companyError) throw companyError;
+      if (companyError) {
+        if (companyError.code === 'PGRST116') {
+          setError("⚠️ La empresa asociada a este Kiosko no existe. Por favor, cambia de pestaña en el simulador o recarga la página.");
+          setLoading(false);
+          return;
+        }
+        throw companyError;
+      }
       
       if (companyData.kiosk_device_id && companyData.kiosk_device_id !== localDeviceId) {
         setError("⚠️ Este dispositivo ha sido desvinculado. Se ha activado otra tablet como Kiosko.");
@@ -1650,8 +1670,8 @@ export default function KioskModeScreen() {
                                     <div key={idx} className={`relative overflow-hidden rounded-2xl border ${s.card} flex items-center p-3 gap-3 animate-in fade-in duration-200`}>
                                       <div className={`absolute left-0 top-0 bottom-0 w-1 ${s.bar}`} />
                                       <div className="size-10 rounded-full overflow-hidden shrink-0 border border-slate-700/50 ml-1">
-                                        {member.profiles?.avatar_url ? (
-                                          <img src={member.profiles.avatar_url} alt={member.profiles.full_name} className="w-full h-full object-cover" />
+                                        {member.profiles?.avatar || member.profiles?.avatar_url ? (
+                                          <img src={member.profiles.avatar || member.profiles.avatar_url} alt={member.profiles.full_name} className="w-full h-full object-cover" />
                                         ) : (
                                           <div className={`w-full h-full flex items-center justify-center font-bold text-sm bg-slate-700 text-slate-200`}>
                                             {member.profiles?.full_name?.charAt(0).toUpperCase()}

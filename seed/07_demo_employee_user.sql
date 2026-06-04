@@ -53,6 +53,14 @@ BEGIN
     UPDATE public.absences SET employee_id = emp_auth_id
     WHERE employee_id = pedro_profile_id AND company_id = company_uuid;
 
+    -- Actualizar tasks (tareas y avisos asignados)
+    UPDATE public.tasks SET assigned_to = emp_auth_id
+    WHERE assigned_to = pedro_profile_id AND company_id = company_uuid;
+
+    -- Actualizar employee_documents (nóminas y contratos)
+    UPDATE public.employee_documents SET employee_id = emp_auth_id
+    WHERE employee_id = pedro_profile_id AND company_id = company_uuid;
+
     RAISE NOTICE 'Pedro Jiménez Ruiz vinculado al usuario Auth empleado.demo@fycheo-demo.com';
   ELSE
     -- Si no existe el perfil, crearlo directamente con el ID del auth user

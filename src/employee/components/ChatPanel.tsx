@@ -290,19 +290,17 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ companyId, onUnreadChange, onClos
                   setMessages(prev => prev.filter(m => m.id !== newMsg.id));
                 });
             } else {
-              // Incrementar badge del remitente
-              setCoworkers(prev =>
-                prev.map(c =>
+              // Incrementar badge del remitente y notificar total al padre
+              setCoworkers(prev => {
+                const updated = prev.map(c =>
                   c.user_id === newMsg.sender_id
                     ? { ...c, unreadCount: c.unreadCount + 1 }
                     : c
-                )
-              );
-              // Notificar al padre
-              onUnreadChange?.(
-                // Recalcular total
-                0 // Se actualizará en siguiente render via coworkers
-              );
+                );
+                const total = updated.reduce((acc, c) => acc + c.unreadCount, 0);
+                onUnreadChange?.(total);
+                return updated;
+              });
             }
             return current;
           });
