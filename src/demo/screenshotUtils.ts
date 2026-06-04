@@ -55,7 +55,7 @@ async function captureIframe(device: DeviceType): Promise<HTMLCanvasElement> {
     height: nativeH,
     canvasWidth: nativeW,
     canvasHeight: nativeH,
-    backgroundColor: null,
+    backgroundColor: undefined,
     pixelRatio: 1,
     skipFonts: false,
   });
