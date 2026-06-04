@@ -5,6 +5,7 @@ import {
   Users, Clock, CalendarOff, ChevronRight, Loader2,
   BarChart2, RefreshCw, Maximize2
 } from 'lucide-react';
+import ScreenshotTool from './ScreenshotTool';
 
 const DEMO_COMPANY_ID  = import.meta.env.VITE_DEMO_COMPANY_ID || '';
 
@@ -345,9 +346,12 @@ export default function DemoShell() {
               <div className={`w-2 h-2 rounded-full ${ready ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400 animate-pulse'}`} />
               {ready ? section.label : 'Iniciando sesión demo...'}
             </div>
-            <button onClick={handleRefresh} title="Recargar" className="w-7 h-7 rounded-lg bg-white/5 border border-white/8 flex items-center justify-center hover:bg-white/10 transition-colors">
-              <RefreshCw size={12} className="text-slate-400" />
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button onClick={handleRefresh} title="Recargar" className="w-7 h-7 rounded-lg bg-white/5 border border-white/8 flex items-center justify-center hover:bg-white/10 transition-colors">
+                <RefreshCw size={12} className="text-slate-400" />
+              </button>
+              <ScreenshotTool device={section.device} />
+            </div>
           </div>
 
           {/* Área de medición — ocupa todo el espacio restante */}
@@ -366,7 +370,7 @@ export default function DemoShell() {
                     </div>
                     <div className="flex-1 mx-3 flex items-center gap-2 bg-white/5 rounded-md px-3 py-1.5">
                       <div className="w-2.5 h-2.5 rounded-full border border-white/20 shrink-0" />
-                      <span className="text-xs text-slate-400 truncate">{iframeUrl || 'demo.fycheo.es/manager'}</span>
+                      <span className="text-xs text-slate-400 truncate">https://www.manager.fycheo.es</span>
                     </div>
                   </div>
                   <div className="flex-1 min-h-0">
@@ -573,7 +577,7 @@ export default function DemoShell() {
         </div>
 
         {/* Barra superior del mockup */}
-        <div className="relative z-10 w-full max-w-5xl flex items-center justify-between">
+        <div className="relative z-20 w-full max-w-5xl flex items-center justify-between">
           <div className="flex items-center gap-2 text-xs text-slate-500">
             <div className={`w-2 h-2 rounded-full ${ready ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400 animate-pulse'}`} />
             {ready ? section.label : 'Iniciando sesión demo...'}
@@ -585,6 +589,7 @@ export default function DemoShell() {
             <button onClick={handleFullscreen} title="Abrir en pantalla completa" className="w-7 h-7 rounded-lg bg-white/5 border border-white/8 flex items-center justify-center hover:bg-white/10 transition-colors">
               <Maximize2 size={12} className="text-slate-400" />
             </button>
+            <ScreenshotTool device={section.device} />
           </div>
         </div>
 
@@ -602,7 +607,7 @@ export default function DemoShell() {
                 <div className="flex-1 mx-3 flex items-center gap-2 bg-white/5 rounded-md px-3 py-1.5">
                   <div className="w-2.5 h-2.5 rounded-full border border-white/20 shrink-0" />
                   <span className="text-xs text-slate-400 truncate">
-                    {iframeUrl || 'demo.fycheo.es/manager'}
+                    https://www.manager.fycheo.es
                   </span>
                 </div>
               </div>
