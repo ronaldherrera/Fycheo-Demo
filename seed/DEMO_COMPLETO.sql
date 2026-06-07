@@ -50,12 +50,13 @@ CREATE TABLE public.teams (
 );
 
 CREATE TABLE public.company_members (
-  user_id    UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  company_id UUID NOT NULL REFERENCES public.companies(id) ON DELETE CASCADE,
-  role       TEXT NOT NULL DEFAULT 'employee',
-  team_id    UUID REFERENCES public.teams(id) ON DELETE SET NULL,
-  accepted   BOOLEAN DEFAULT TRUE,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
+  user_id      UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  company_id   UUID NOT NULL REFERENCES public.companies(id) ON DELETE CASCADE,
+  role         TEXT NOT NULL DEFAULT 'employee',
+  team_id      UUID REFERENCES public.teams(id) ON DELETE SET NULL,
+  accepted     BOOLEAN DEFAULT TRUE,
+  weekly_hours NUMERIC DEFAULT 40,
+  created_at   TIMESTAMPTZ DEFAULT NOW(),
   PRIMARY KEY (user_id, company_id)
 );
 
@@ -352,10 +353,10 @@ BEGIN
     (team_dir,  company_uuid, 'Dirección',     'Equipo de administración y dirección general',  NOW() - INTERVAL '13 months');
 
   -- ── Vincular admins a la empresa ──────────────────────────────
-  INSERT INTO public.company_members (user_id, company_id, role, team_id, accepted) VALUES
-    (admin_id,   company_uuid, 'admin',   team_dir, true),
-    (manager_id, company_uuid, 'manager', team_dir, true),
-    (rrhh_id,    company_uuid, 'hr',      team_dir, true);
+  INSERT INTO public.company_members (user_id, company_id, role, team_id, accepted, weekly_hours) VALUES
+    (admin_id,   company_uuid, 'admin',   team_dir, true, 40),
+    (manager_id, company_uuid, 'manager', team_dir, true, 40),
+    (rrhh_id,    company_uuid, 'hr',      team_dir, true, 37.5);
 
   -- ── Perfiles empleados ficticios ─────────────────────────────
   INSERT INTO public.profiles (id, full_name, name, email, avatar, phone, dni_nie, ss_number, created_at) VALUES
@@ -381,25 +382,26 @@ BEGIN
     (e[15], 'Beatriz Aguilar Medina',   'Beatriz',  'beatriz.aguilar@martinez-sa.com', 'https://images.unsplash.com/photo-1551836022-d5d88e9218df?w=150&h=150&fit=crop&crop=face', '+34 688 018 018','12345680X','28/015/15', NOW()-INTERVAL '13 months');
 
   -- ── Vincular empleados a la empresa ──────────────────────────
-  INSERT INTO public.company_members (user_id, company_id, role, team_id, accepted) VALUES
-    -- Repartidores
-    (e[1], company_uuid, 'employee', team_rep, true),
-    (e[2], company_uuid, 'employee', team_rep, true),
-    (e[3], company_uuid, 'employee', team_rep, true),
-    (e[4], company_uuid, 'employee', team_rep, true),
-    (e[5], company_uuid, 'employee', team_rep, true),
-    -- Almacén
-    (e[6], company_uuid, 'employee', team_alm, true),
-    (e[7], company_uuid, 'employee', team_alm, true),
-    (e[8], company_uuid, 'employee', team_alm, true),
-    (e[9], company_uuid, 'employee', team_alm, true),
-    (e[10],company_uuid, 'employee', team_alm, true),
-    -- Oficina
-    (e[11],company_uuid, 'employee', team_ofic, true),
-    (e[12],company_uuid, 'employee', team_ofic, true),
-    (e[13],company_uuid, 'employee', team_ofic, true),
-    (e[14],company_uuid, 'employee', team_ofic, true),
-    (e[15],company_uuid, 'employee', team_ofic, true);
+  -- weekly_hours: Repartidores y Almacén 40h (convenio transporte), Oficina 37.5h
+  INSERT INTO public.company_members (user_id, company_id, role, team_id, accepted, weekly_hours) VALUES
+    -- Repartidores (40h/semana — convenio de transporte)
+    (e[1], company_uuid, 'employee', team_rep, true, 40),
+    (e[2], company_uuid, 'employee', team_rep, true, 40),
+    (e[3], company_uuid, 'employee', team_rep, true, 40),
+    (e[4], company_uuid, 'employee', team_rep, true, 40),
+    (e[5], company_uuid, 'employee', team_rep, true, 40),
+    -- Almacén (40h/semana)
+    (e[6], company_uuid, 'employee', team_alm, true, 40),
+    (e[7], company_uuid, 'employee', team_alm, true, 40),
+    (e[8], company_uuid, 'employee', team_alm, true, 40),
+    (e[9], company_uuid, 'employee', team_alm, true, 40),
+    (e[10],company_uuid, 'employee', team_alm, true, 40),
+    -- Oficina (37.5h/semana — jornada intensiva viernes)
+    (e[11],company_uuid, 'employee', team_ofic, true, 37.5),
+    (e[12],company_uuid, 'employee', team_ofic, true, 37.5),
+    (e[13],company_uuid, 'employee', team_ofic, true, 37.5),
+    (e[14],company_uuid, 'employee', team_ofic, true, 37.5),
+    (e[15],company_uuid, 'employee', team_ofic, true, 37.5);
 
   -- ── Festivos (Año 2026) ──────────────────────────────────────
   INSERT INTO public.company_holidays (company_id, name, date, type) VALUES

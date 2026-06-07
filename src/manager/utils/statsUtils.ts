@@ -10,7 +10,8 @@ export const calculateBasicStats = (
   timeEntries: any[],
   absences: Absence[],
   monthStart: Date,
-  monthEnd: Date
+  monthEnd: Date,
+  dailyHours: number = 8
 ) => {
   // 1. Filtrar datos del empleado
   const empShifts = shifts.filter(s => s.employee_id === employeeId && s.status !== 'pending_deletion');
@@ -134,7 +135,7 @@ export const calculateBasicStats = (
     }
   });
 
-  const netPlannedMinutes = Math.max(0, plannedMinutes - (medicalDays * 8 * 60));
+  const netPlannedMinutes = Math.max(0, plannedMinutes - (medicalDays * dailyHours * 60));
   const totalMinutes = Math.round(realMinutes - netPlannedMinutes);
   
   const isPositive = totalMinutes >= 0;

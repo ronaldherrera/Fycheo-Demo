@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, Fragment, useLayoutEffect, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { Calendar, Plus, ChevronLeft, ChevronRight, Clock, User, ChevronDown, Copy, CalendarDays, Save, Download, Trash2, Minus, Loader2, Check, FileText, Undo, Redo, Users, AlertTriangle, CalendarOff, Palmtree, Stethoscope } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -163,10 +164,37 @@ const isRangeConsecutive = (dates: Date[]): boolean => {
   return true;
 };
 
+function PortalTooltip({ text, children }: { text: string; children: React.ReactNode }) {
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  return (
+    <>
+      <div
+        onMouseEnter={(e) => {
+          const r = e.currentTarget.getBoundingClientRect();
+          setPos({ x: r.left + r.width / 2, y: r.top - 6 });
+        }}
+        onMouseLeave={() => setPos(null)}
+        className="min-w-0 flex-1"
+      >
+        {children}
+      </div>
+      {pos && createPortal(
+        <div
+          style={{ position: 'fixed', left: pos.x, top: pos.y, transform: 'translate(-50%, -100%)', zIndex: 99999 }}
+          className="px-2 py-1 bg-slate-800 text-slate-200 text-[10px] font-normal rounded pointer-events-none whitespace-nowrap shadow-lg border border-white/10"
+        >
+          {text}
+        </div>,
+        document.body
+      )}
+    </>
+  );
+}
+
 const Shifts = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
-  const [selectedTeamId, setSelectedTeamId] = useState<string>('all');
+  const [selectedTeamId, setSelectedTeamId] = useState<string>(() => localStorage.getItem('fycheo_shifts_team') || 'all');
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [absences, setAbsences] = useState<Absence[]>([]);
   const [leavePolicies, setLeavePolicies] = useState<LeavePolicy[]>([]);
@@ -1263,7 +1291,7 @@ const Shifts = () => {
         absenceService.getAbsences(companyId).catch(() => [])
       ]);
 
-      setEmployees(empData || []);
+      setEmployees((empData || []).filter(e => e.role === 'employee' || !!e.team_id));
       setTeams(teamsData || []);
       setAbsences(absencesData || []);
 
@@ -1447,7 +1475,9 @@ const Shifts = () => {
     if (!shift.notes) return null;
 
     let cleanNotes = shift.notes
-      .replace(/\(Descanso:\s*\d+\s*min(?:\s*-\s*[^)]+)?\)\s*·?\s*/i, '')
+      .replace(/^\[[^\]]+\]\s*·?\s*/i, '')                               // quita prefijo [Nombre Tipo]
+      .replace(/\(Descanso T\d?:\s*\d+\s*min(?:\s*-\s*[^)]+)?\)\s*·?\s*/gi, '') // descanso T1/T2
+      .replace(/\(Descanso:\s*\d+\s*min(?:\s*-\s*[^)]+)?\)\s*·?\s*/i, '') // descanso simple
       .replace(/\(Plus\)\s*·?\s*/i, '')
       .replace(/\s*·?\s*\(Plus\)/i, '')
       .trim();
@@ -1597,9 +1627,15 @@ const Shifts = () => {
     if (selectedTeamId !== 'all') {
       baseEmployees = employees.filter(e => e.team_id === selectedTeamId);
     }
-    
+
+    baseEmployees = [...baseEmployees].sort((a, b) => {
+      const idxA = employeeOrder.indexOf(a.id);
+      const idxB = employeeOrder.indexOf(b.id);
+      return (idxA !== -1 ? idxA : 9999) - (idxB !== -1 ? idxB : 9999);
+    });
+
     const targetDatesStr = summaryDates.map(d => getLocalDateString(d));
-    
+
     return baseEmployees.map(emp => {
       const empShifts = shifts.filter(s => 
         s.employee_id === emp.id && 
@@ -1672,7 +1708,31 @@ const Shifts = () => {
       });
       
       const totalHours = ordinaryHours + festiveHours + extraHours;
-      
+
+      // ── Horas contratadas para el periodo ──────────────────────
+      const activeDaysPerWeek = Object.values(weeklySchedule).filter(d => d.active).length || 5;
+      const dailyContractedHours = (emp.weekly_hours ?? 40) / activeDaysPerWeek;
+
+      const monthBreakdown: Record<string, { days: number; hours: number }> = {};
+      let workingDaysInPeriod = 0;
+      targetDatesStr.forEach(dateStr => {
+        const dow = new Date(dateStr + 'T12:00:00').getDay();
+        const special = specialDays[dateStr];
+        const isClosed = special
+          ? (special.variant === 'closed_holiday' || special.variant === 'closed_normal')
+          : !weeklySchedule[dow]?.active;
+        if (!isClosed) {
+          workingDaysInPeriod++;
+          const monthKey = dateStr.slice(0, 7);
+          if (!monthBreakdown[monthKey]) monthBreakdown[monthKey] = { days: 0, hours: 0 };
+          monthBreakdown[monthKey].days++;
+          monthBreakdown[monthKey].hours += dailyContractedHours;
+        }
+      });
+      const contractedHoursForPeriod = workingDaysInPeriod * dailyContractedHours;
+      const balanceVsContracted = totalHours - contractedHoursForPeriod;
+      const monthKeys = Object.keys(monthBreakdown).sort();
+
       // Chequeo de alertas legales: > 40h o descansos < 12h
       // Solo mostramos alerta de >40h si estamos viendo la vista semanal
       let hasOvertimeAlert = summaryPeriod === 'week' ? (totalHours > 40) : false;
@@ -1726,10 +1786,15 @@ const Shifts = () => {
         hasOvertimeAlert,
         hasRestAlert,
         restAlertDays,
-        hasShifts: empShifts.length > 0
+        hasShifts: empShifts.length > 0,
+        contractedHoursForPeriod,
+        balanceVsContracted,
+        monthBreakdown,
+        monthKeys,
+        dailyContractedHours,
       };
     });
-  }, [employees, selectedTeamId, summaryDates, shifts, specialDays, companyBreakIncluded, summaryPeriod]);
+  }, [employees, selectedTeamId, summaryDates, shifts, specialDays, companyBreakIncluded, summaryPeriod, employeeOrder]);
 
   // Eventos de comunicación con el Sidebar para el botón de Publicar
   useEffect(() => {
@@ -1852,7 +1917,7 @@ const Shifts = () => {
               <div className="w-full sm:w-72">
                 <CustomSelect
                   value={selectedTeamId}
-                  onChange={(val) => setSelectedTeamId(val)}
+                  onChange={(val) => { setSelectedTeamId(val); localStorage.setItem('fycheo_shifts_team', val); }}
                   options={[
                     { value: 'all', label: 'Todos los equipos' },
                     ...teams.map(team => ({ value: team.id, label: team.name }))
@@ -2223,7 +2288,7 @@ const Shifts = () => {
                         {cellScheduledCount}
                       </span>
                     )}
-                    <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 px-2 py-1 bg-slate-800 text-slate-200 text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-lg border border-white/10">
+                    <div className="absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 px-2 py-1 bg-slate-800 text-slate-200 text-[10px] font-normal rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-[60] shadow-lg border border-white/10">
                       {tooltipText} ({cellScheduledCount === 1 ? '1 trab.' : `${cellScheduledCount} trab.`})
                     </div>
                   </div>
@@ -2437,7 +2502,7 @@ const Shifts = () => {
                               className="flex-1 min-w-[32px] border-l relative h-full transition-colors duration-300"
                               style={{ borderColor: dayBorder }}
                             >
-                              <div className="absolute bottom-1 left-1/2 origin-bottom-left -rotate-45">
+                              <div className="absolute bottom-1 left-3 origin-bottom-left -rotate-45">
                                 <span className="text-[10px] font-semibold text-slate-400 whitespace-nowrap tracking-wider">
                                   {`${(hour % 24).toString().padStart(2, '0')}:00`}
                                   {hour >= 24 && <span className="text-[8px] text-primary ml-0.5 font-bold">+1d</span>}
@@ -2507,12 +2572,18 @@ const Shifts = () => {
                                       <User size={14} />
                                     )}
                                   </div>
-                                  <div className="truncate flex-1">
+                                  <PortalTooltip text={(() => {
+                                    const activeDays = Object.values(weeklySchedule).filter(d => d.active).length || 5;
+                                    const dailyH = (emp.weekly_hours ?? 40) / activeDays;
+                                    const diff = totalHours - dailyH;
+                                    const diffLabel = diff > 0.05 ? `+${formatProposedHours(diff)} extra` : diff < -0.05 ? `${formatProposedHours(Math.abs(diff))} déficit` : 'justo';
+                                    return `Contrato: ${emp.weekly_hours ?? 40}h/sem · Hoy previsto: ${formatProposedHours(dailyH)} · Propuesto: ${formatProposedHours(totalHours)} (${diffLabel})`;
+                                  })()}>
                                     <h3 className="text-white text-sm font-medium truncate group-hover:text-primary transition-colors">{empName}</h3>
                                     <p className="text-xs text-slate-500 mt-0.5 truncate">
                                       {totalHours > 0 ? `${formatProposedHours(totalHours)} propuestas` : 'Sin turno'}
                                     </p>
-                                  </div>
+                                  </PortalTooltip>
                                 </Link>
                               </div>
 
@@ -2885,7 +2956,6 @@ const Shifts = () => {
                                               width: `${Math.min(widthPercent, 100 - leftPercent)}%`,
                                               transformOrigin: 'left'
                                             }}
-                                            title={shift.notes ? `Observaciones: ${shift.notes}` : undefined}
                                             className={`absolute top-1/2 -translate-y-1/2 h-12 cursor-grab active:cursor-grabbing ${glowClass} transition-all rounded-xl z-20`}
                                             onClick={() => {
                                               setSelectedShiftToEdit(shift);
@@ -2935,18 +3005,12 @@ const Shifts = () => {
                                                         const totalMins = (t1m ? parseInt(t1m[1]) : 0) + (t2m ? parseInt(t2m[1]) : 0);
                                                         return (
                                                           <>
-                                                            <span>{shift.start_time} - {getAdjustedEndTime(shift.end_time, shift.overtime, endIsPaid ? 0 : endBreakMins)}</span>
-                                                            {totalMins > 0 && (
-                                                              <span
-                                                                className={`text-[9px] font-bold px-1 py-0.5 rounded flex items-center gap-0.5 select-none ${endIsPaid
-                                                                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                                                                  : 'bg-slate-500/20 text-slate-400 border border-slate-500/30'
-                                                                  }`}
-                                                                title={`Descanso total: ${totalMins}min`}
-                                                              >
-                                                                ☕ {totalMins}m
-                                                              </span>
-                                                            )}
+                                                            <span>
+                                                              {shift.start_time} - {getAdjustedEndTime(shift.end_time, shift.overtime, endIsPaid ? 0 : endBreakMins)}
+                                                              {totalMins > 0 && (
+                                                                <span className="ml-1.5 text-[9px] font-normal opacity-75" title={`Descanso: ${totalMins}min`}>☕ {totalMins}m</span>
+                                                              )}
+                                                            </span>
                                                           </>
                                                         );
                                                       })()}
@@ -2974,7 +3038,7 @@ const Shifts = () => {
                                                   </div>
 
                                                   {/* Fila inferior */}
-                                                  <div className="flex items-center gap-1 min-w-0 text-[9px] font-medium italic text-slate-400 opacity-75 truncate" title={shift.notes}>
+                                                  <div className="flex items-center gap-1 min-w-0 text-[9px] font-medium italic text-slate-400 opacity-75 truncate">
                                                     <span>
                                                       {(() => {
                                                         const baseStatus = shift.status === 'completed' ? 'Completado' : shift.status === 'absent' ? 'Ausente' : 'Programado';
@@ -3471,12 +3535,23 @@ const Shifts = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {employeesSummary.map(({ employee, ordinaryHours, festiveHours, extraHours, plusHours, totalHours, typeDetails, hasOvertimeAlert, hasRestAlert, restAlertDays, hasShifts }) => {
+          {employeesSummary.map(({ employee, ordinaryHours, festiveHours, extraHours, plusHours, totalHours, typeDetails, hasOvertimeAlert, hasRestAlert, restAlertDays, hasShifts, contractedHoursForPeriod, balanceVsContracted, monthBreakdown, monthKeys }) => {
             const empName = employee.full_name || employee.name || employee.email || 'Empleado';
+            const MONTHS_SHORT = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+            const isMultiMonth = monthKeys.length > 1;
+            const isOverContract = balanceVsContracted > 0.1;
+            const isUnderContract = balanceVsContracted < -0.1;
             return (
-              <div 
-                key={employee.id} 
-                className="bg-background-dark/40 border border-white/5 hover:border-white/10 p-4 rounded-xl transition-all flex flex-col justify-between space-y-3"
+              <div
+                key={employee.id}
+                draggable
+                onDragStart={(e) => handleEmployeeDragStart(e as any, employee.id)}
+                onDragEnd={handleEmployeeDragEnd}
+                onDragOver={(e) => handleEmployeeDragOver(e as any, employee.id)}
+                onDrop={(e) => handleEmployeeDrop(e as any, employee.id)}
+                className={`bg-background-dark/40 border p-4 rounded-xl transition-all flex flex-col justify-between space-y-3 cursor-grab active:cursor-grabbing select-none
+                  ${dragOverEmployeeId === employee.id ? 'border-primary/50 bg-primary/5' : 'border-white/5 hover:border-white/10'}
+                  ${draggedEmployeeId === employee.id ? 'opacity-40 scale-95' : ''}`}
               >
                 {/* Cabecera del Empleado */}
                 <div className="flex items-center justify-between">
@@ -3514,24 +3589,24 @@ const Shifts = () => {
                 {/* Desglose de Horas */}
                 {hasShifts ? (
                   <div className="space-y-2">
-                    {/* Barra de progreso desglosada */}
+                    {/* Barra de progreso */}
                     <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden flex">
                       {ordinaryHours > 0 && (
-                        <div 
+                        <div
                           style={{ width: `${(ordinaryHours / Math.max(1, totalHours)) * 100}%` }}
                           className="bg-primary h-full"
                           title={`Horas ordinarias: ${formatProposedHours(ordinaryHours)}`}
                         />
                       )}
                       {festiveHours > 0 && (
-                        <div 
+                        <div
                           style={{ width: `${(festiveHours / Math.max(1, totalHours)) * 100}%` }}
                           className="bg-emerald-500 h-full border-l border-background-dark"
                           title={`Horas festivas: ${formatProposedHours(festiveHours)}`}
                         />
                       )}
                       {extraHours > 0 && (
-                        <div 
+                        <div
                           style={{ width: `${(extraHours / Math.max(1, totalHours)) * 100}%` }}
                           className="bg-amber-500 h-full border-l border-background-dark"
                           title={`Horas extras: ${formatProposedHours(extraHours)}`}
@@ -3566,7 +3641,7 @@ const Shifts = () => {
                     {/* Tipos de Jornadas Propuestas */}
                     <div className="flex flex-wrap gap-1 pt-1.5 border-t border-white/5">
                       {Object.entries(typeDetails).map(([label, details]) => (
-                        <span 
+                        <span
                           key={label}
                           className={`text-[9px] font-semibold border px-1.5 py-0.5 rounded flex items-center gap-1 select-none ${details.className.replace('font-bold', '')}`}
                         >

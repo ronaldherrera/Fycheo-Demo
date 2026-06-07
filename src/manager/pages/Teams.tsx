@@ -76,11 +76,17 @@ const Teams = () => {
   const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Modal State: Delete Employee
+  // Modal State: Quitar del equipo
   const [isDeleteEmpModalOpen, setIsDeleteEmpModalOpen] = useState(false);
   const [empToDelete, setEmpToDelete] = useState<Employee | null>(null);
   const [deleteEmpConfirmationText, setDeleteEmpConfirmationText] = useState('');
   const [isDeletingEmp, setIsDeletingEmp] = useState(false);
+
+  // Modal State: Eliminar de la empresa
+  const [isRemoveFromCompanyModalOpen, setIsRemoveFromCompanyModalOpen] = useState(false);
+  const [empToRemove, setEmpToRemove] = useState<Employee | null>(null);
+  const [removeConfirmationText, setRemoveConfirmationText] = useState('');
+  const [isRemoving, setIsRemoving] = useState(false);
 
   const [isTeamPermModalOpen, setIsTeamPermModalOpen] = useState(false);
   const [teamForPerms, setTeamForPerms] = useState<Team | null>(null);
@@ -188,8 +194,16 @@ const Teams = () => {
           const user = await employeeService.searchUserByEmail(addEmail);
           if (!user) throw new Error("El usuario no está registrado en la App de Fycheo. Pídele que se registre primero.");
           
-          // 1. Vincular a la empresa
-          await employeeService.linkUserToCompany(user.id, activeCompany.id, addRole, selectedTeamForAdd);
+          // 1. Vincular a la empresa (si ya pertenece, solo actualizamos el equipo)
+          try {
+            await employeeService.linkUserToCompany(user.id, activeCompany.id, addRole, selectedTeamForAdd);
+          } catch (linkErr: any) {
+            if (linkErr.message?.includes('ya pertenece')) {
+              await employeeService.updateEmployee(user.id, activeCompany.id, { team_id: selectedTeamForAdd });
+            } else {
+              throw linkErr;
+            }
+          }
           
           // 2. Sincronizar el nombre si el administrador lo rellenó
           if (addName.trim()) {
@@ -279,24 +293,45 @@ const Teams = () => {
       setIsDeleteEmpModalOpen(true);
   };
 
-  const requiredEmpConfirmationString = empToDelete && activeCompany ? `eliminar a ${empToDelete.name} de ${activeCompany.name}` : '';
+  const requiredEmpConfirmationString = empToDelete ? `quitar a ${empToDelete.name} del equipo` : '';
   const canDeleteEmp = deleteEmpConfirmationText.trim().toLowerCase() === requiredEmpConfirmationString.toLowerCase();
 
   const handleDeleteEmp = async () => {
       if (!empToDelete || !activeCompany?.id || !canDeleteEmp) return;
       setIsDeletingEmp(true);
       try {
-          await employeeService.unlinkUserFromCompany(empToDelete.id, activeCompany.id);
+          await employeeService.updateEmployee(empToDelete.id, activeCompany.id, { team_id: null });
           await loadData();
           setIsDeleteEmpModalOpen(false);
       } catch (err) {
           console.error(err);
-          alert("Error al eliminar al empleado");
+          alert("Error al quitar al empleado del equipo");
       } finally {
           setIsDeletingEmp(false);
       }
   };
 
+
+  const requiredRemoveString = empToRemove ? `eliminar a ${empToRemove.name} de la empresa` : '';
+  const canRemove = removeConfirmationText.trim().toLowerCase() === requiredRemoveString.toLowerCase();
+
+  const handleRemoveFromCompany = async () => {
+      if (!empToRemove || !activeCompany?.id || !canRemove) return;
+      if (empToRemove.role === 'admin') return;
+      setIsRemoving(true);
+      try {
+          await employeeService.unlinkUserFromCompany(empToRemove.id, activeCompany.id);
+          await loadData();
+          setIsRemoveFromCompanyModalOpen(false);
+          setEmpToRemove(null);
+          setRemoveConfirmationText('');
+      } catch (err) {
+          console.error(err);
+          alert("Error al eliminar al empleado de la empresa");
+      } finally {
+          setIsRemoving(false);
+      }
+  };
 
   // --- Handlers para Tareas ---
   const openTaskModal = (teamId: string, teamEmps: Employee[]) => {
@@ -981,7 +1016,7 @@ const Teams = () => {
                     return (
                       <div
                         key={emp.id}
-                        className="flex flex-col p-4 rounded-xl bg-[#151B2B] border border-white/5 hover:border-white/10 transition-colors group/emp"
+                        className="flex flex-col p-4 rounded-xl bg-[#151B2B] border border-white/5 hover:border-primary/40 hover:bg-primary/5 transition-colors group/emp"
                       >
                         <div className="flex items-start justify-between gap-3 mb-3">
                           <Link to={`/manager/equipos/trabajador/${emp.id}`} className="flex items-center gap-3 min-w-0 group-hover/emp:opacity-80 transition-opacity flex-1">
@@ -1012,9 +1047,15 @@ const Teams = () => {
                                   <Mail size={16} />
                                 </button>
                               )}
-                              <button onClick={() => openDeleteEmpModal(emp)} className="p-1.5 text-slate-500 hover:text-red-400 rounded-lg hover:bg-red-500/10 transition-all shrink-0" title="Eliminar empleado">
-                                <Trash2 size={16} />
-                              </button>
+                              {emp.role !== 'admin' && (
+                                <button
+                                  onClick={() => { setEmpToRemove(emp); setRemoveConfirmationText(''); setIsRemoveFromCompanyModalOpen(true); }}
+                                  className="p-1.5 text-slate-500 hover:text-red-400 rounded-lg hover:bg-red-500/10 transition-all shrink-0"
+                                  title="Eliminar de la empresa"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>
@@ -1286,6 +1327,47 @@ const Teams = () => {
         )}
 
         {/* Modal: Eliminar Empleado */}
+        {/* Modal: Eliminar de la Empresa */}
+        {isRemoveFromCompanyModalOpen && empToRemove && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                    className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+                    onClick={() => !isRemoving && setIsRemoveFromCompanyModalOpen(false)} />
+                <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }}
+                    className="bg-surface-dark w-full max-w-md rounded-2xl border border-red-500/30 shadow-2xl shadow-red-500/10 relative z-10 overflow-hidden">
+                    <div className="p-6">
+                        <div className="w-12 h-12 bg-red-500/10 rounded-full flex items-center justify-center text-red-500 mb-4 mx-auto">
+                            <AlertTriangle size={24} />
+                        </div>
+                        <h3 className="text-xl font-bold text-white text-center mb-2">¿Eliminar de la empresa?</h3>
+                        <p className="text-slate-400 text-sm text-center mb-6">
+                            <strong>{empToRemove.name}</strong> perderá el acceso a esta organización. Esta acción no elimina su cuenta de Fycheo.
+                        </p>
+                        <div className="bg-black/30 border border-white/5 rounded-xl p-4 mb-6">
+                            <p className="text-xs text-slate-400 mb-2 font-medium">Para confirmar, escribe exactamente:</p>
+                            <div className="bg-surface-dark font-mono text-xs text-red-400 p-2 rounded border border-red-500/20 mb-3 select-all">
+                                {requiredRemoveString}
+                            </div>
+                            <input type="text" placeholder="Escribe la frase aquí..."
+                                className="w-full px-3 py-2 text-sm bg-black/50 border border-white/10 rounded-lg text-white placeholder-slate-600 focus:ring-1 focus:ring-red-500 outline-none"
+                                value={removeConfirmationText}
+                                onChange={e => setRemoveConfirmationText(e.target.value)} />
+                        </div>
+                        <div className="flex gap-3">
+                            <button onClick={() => setIsRemoveFromCompanyModalOpen(false)} disabled={isRemoving}
+                                className="flex-1 px-4 py-2.5 rounded-xl font-semibold text-slate-300 hover:bg-white/5 border border-white/10 transition-colors">
+                                Cancelar
+                            </button>
+                            <button onClick={handleRemoveFromCompany} disabled={!canRemove || isRemoving}
+                                className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2.5 rounded-xl font-semibold transition-all disabled:opacity-30 flex justify-center items-center gap-2">
+                                {isRemoving ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : 'Sí, eliminar de la empresa'}
+                            </button>
+                        </div>
+                    </div>
+                </motion.div>
+            </div>
+        )}
+
         {isDeleteEmpModalOpen && empToDelete && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
                 <motion.div 
@@ -1303,9 +1385,9 @@ const Teams = () => {
                         <div className="w-12 h-12 bg-red-500/10 rounded-full flex items-center justify-center text-red-500 mb-4 mx-auto">
                             <AlertTriangle size={24} />
                         </div>
-                        <h3 className="text-xl font-bold text-white text-center mb-2">¿Eliminar a este empleado?</h3>
+                        <h3 className="text-xl font-bold text-white text-center mb-2">¿Quitar del equipo?</h3>
                         <p className="text-slate-400 text-sm text-center mb-6">
-                            Estás a punto de eliminar a <strong>{empToDelete.name}</strong> de tu organización. Perderá inmediatamente el acceso a sus turnos y al dashboard de tu empresa.
+                            <strong>{empToDelete.name}</strong> será desasignado del equipo pero seguirá perteneciendo a la organización. Puedes volver a asignarle un equipo en cualquier momento.
                         </p>
 
                         <div className="bg-black/30 border border-white/5 rounded-xl p-4 mb-6">
@@ -1337,7 +1419,7 @@ const Teams = () => {
                                 disabled={!canDeleteEmp || isDeletingEmp}
                                 className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2.5 rounded-xl font-semibold transition-all disabled:opacity-30 disabled:hover:bg-red-500 flex justify-center items-center gap-2"
                             >
-                                {isDeletingEmp ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : 'Sí, eliminar empleado'}
+                                {isDeletingEmp ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : 'Sí, quitar del equipo'}
                             </button>
                         </div>
                     </div>

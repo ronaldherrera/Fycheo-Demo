@@ -462,11 +462,9 @@ export default function DemoShell() {
       {/* ── SIDEBAR ────────────────────────────────────────────── */}
       <aside className="w-72 shrink-0 flex flex-col border-r border-white/5 bg-[#0C1020]">
 
-        {/* Logo */}
-        <div className="h-16 flex items-center gap-2.5 px-5 border-b border-white/5">
-          <img src="/icono-kiosko.svg" alt="Fycheo" className="w-8 h-8 rounded-xl" />
-          <span className="font-bold text-lg tracking-tight">Fycheo</span>
-          <span className="text-[10px] font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full">DEMO</span>
+        <div className="h-16 flex items-center gap-2 px-5 border-b border-white/5">
+          <img src="https://www.fycheo.es/brand/logotipo_bg-dark.svg" alt="Fycheo" className="h-7 object-contain" />
+          <span className="text-[10px] font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full ml-1 shrink-0">DEMO</span>
         </div>
 
         {/* Company badge */}

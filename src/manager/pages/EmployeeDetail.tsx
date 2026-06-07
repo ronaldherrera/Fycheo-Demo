@@ -147,7 +147,11 @@ const EmployeeDetail = () => {
   const [isEditingInfo, setIsEditingInfo] = useState(false);
   const [editDni, setEditDni] = useState('');
   const [editSsNumber, setEditSsNumber] = useState('');
+  const [editWeeklyHours, setEditWeeklyHours] = useState('40');
   const [savingInfo, setSavingInfo] = useState(false);
+
+  // Horario de empresa (para calcular horas diarias contratadas)
+  const [weeklySchedule, setWeeklySchedule] = useState<Record<number, { active: boolean; start: string; end: string }>>({});
 
   // Selector de periodo para los KPIs de Salud Horaria (con persistencia)
   const [summaryPeriod, setSummaryPeriod] = useState<'day' | 'week' | 'month' | 'year' | 'calendar'>(() => {
@@ -350,6 +354,7 @@ const EmployeeDetail = () => {
         setEmployee(empData);
         setEditDni(empData.dni_nie || '');
         setEditSsNumber(empData.ss_number || '');
+        setEditWeeklyHours(String(empData.weekly_hours ?? 40));
       }
     } catch (err) {
       console.error(err);
@@ -363,11 +368,13 @@ const EmployeeDetail = () => {
     if (!employeeId || !activeCompany?.id) return;
     setSavingInfo(true);
     try {
+      const wh = parseFloat(editWeeklyHours);
       await employeeService.updateEmployee(employeeId, activeCompany.id, {
         dni_nie: editDni,
-        ss_number: editSsNumber
+        ss_number: editSsNumber,
+        weekly_hours: isNaN(wh) || wh <= 0 ? 40 : wh,
       });
-      setEmployee(prev => prev ? { ...prev, dni_nie: editDni, ss_number: editSsNumber } : prev);
+      setEmployee(prev => prev ? { ...prev, dni_nie: editDni, ss_number: editSsNumber, weekly_hours: isNaN(wh) || wh <= 0 ? 40 : wh } : prev);
       setIsEditingInfo(false);
     } catch (err) {
       console.error(err);
@@ -400,7 +407,16 @@ const EmployeeDetail = () => {
         settingsData.leave_policies.forEach((p: any) => polMap[p.id] = p);
       }
       setPolicies(polMap);
-      
+
+      if (settingsData?.schedule) {
+        const dayMap: Record<string, number> = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 };
+        const sched: Record<number, { active: boolean; start: string; end: string }> = {};
+        Object.entries(settingsData.schedule).forEach(([key, val]: [string, any]) => {
+          if (dayMap[key] !== undefined) sched[dayMap[key]] = val;
+        });
+        setWeeklySchedule(sched);
+      }
+
       setShifts(empShifts);
       setTimeEntries(entries);
       setAbsences(empAbsences);
@@ -682,6 +698,10 @@ const EmployeeDetail = () => {
 
   // KPIs de Salud Horaria del periodo seleccionado
   const healthStats = useMemo(() => {
+    // Horas diarias contratadas según horas semanales y días activos de la empresa
+    const activeDaysPerWeek = Object.values(weeklySchedule).filter(d => d.active).length || 5;
+    const dailyExpectedHours = (employee?.weekly_hours ?? 40) / activeDaysPerWeek;
+
     // 1. Horas planificadas: Suma de duraciones de turnos del periodo
     let plannedMinutes = 0;
     shifts.forEach(s => {
@@ -891,12 +911,12 @@ const EmployeeDetail = () => {
         } else if (a.type === 'manual_unpaid') {
           // No se cuenta en permisos pagados
         } else {
-          paidLeaveMinutes += daysInPeriod * 8 * 60;
+          paidLeaveMinutes += daysInPeriod * dailyExpectedHours * 60;
           paidLeaveApproved.push({
             start: a.start_date,
             end: a.end_date,
             days: daysInPeriod,
-            hours: daysInPeriod * 8,
+            hours: Math.round(daysInPeriod * dailyExpectedHours * 10) / 10,
             typeLabel,
             reason: a.reason
           });
@@ -914,7 +934,7 @@ const EmployeeDetail = () => {
             start: a.start_date,
             end: a.end_date,
             days: daysInPeriod,
-            hours: daysInPeriod * 8,
+            hours: Math.round(daysInPeriod * dailyExpectedHours * 10) / 10,
             typeLabel,
             reason: a.reason
           });
@@ -924,7 +944,7 @@ const EmployeeDetail = () => {
 
     const plannedHours = Math.round((plannedMinutes / 60) * 10) / 10;
     const realHours = Math.round((realMinutes / 60) * 10) / 10;
-    const medicalHours = medicalDays * 8;
+    const medicalHours = medicalDays * dailyExpectedHours;
     const netPlannedHours = Math.max(0, plannedHours - medicalHours);
     
     const balance = Math.round((realHours - netPlannedHours) * 10) / 10;
@@ -1226,6 +1246,27 @@ const EmployeeDetail = () => {
               ) : (
                 <span className={`text-sm font-semibold ${employee.ss_number ? 'text-slate-200' : 'text-red-400 italic'}`}>
                   {employee.ss_number || 'No especificado'}
+                </span>
+              )}
+            </div>
+
+            {/* Horas semanales contratadas */}
+            <div className="flex items-center gap-2 bg-black/20 border border-white/5 rounded-lg px-3 py-1.5">
+              <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider shrink-0">H/Semana</span>
+              {isEditingInfo ? (
+                <input
+                  type="number"
+                  min="1"
+                  max="80"
+                  step="0.5"
+                  value={editWeeklyHours}
+                  onChange={e => setEditWeeklyHours(e.target.value)}
+                  placeholder="40"
+                  className="bg-transparent border-none outline-none text-sm font-semibold text-white w-16 placeholder:text-slate-600"
+                />
+              ) : (
+                <span className="text-sm font-semibold text-slate-200">
+                  {employee.weekly_hours ?? 40}h
                 </span>
               )}
             </div>

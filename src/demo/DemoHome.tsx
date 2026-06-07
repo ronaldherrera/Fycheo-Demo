@@ -60,8 +60,7 @@ export default function DemoHome() {
       {/* ── NAV ── */}
       <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-8 h-16 border-b border-white/5 bg-[#080C14]/80 backdrop-blur-xl">
         <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center text-white font-bold text-sm">F</div>
-          <span className="font-bold text-lg tracking-tight">Fycheo</span>
+          <img src="https://www.fycheo.es/brand/logotipo_bg-dark.svg" alt="Fycheo" className="h-8 object-contain" />
           <span className="text-[10px] font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full ml-1">DEMO</span>
         </div>
         <div className="flex items-center gap-3">

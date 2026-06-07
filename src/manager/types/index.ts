@@ -10,7 +10,7 @@ export interface Employee {
   // Jerarquía y Equipo
   role: EmployeeRole;
   company_id?: string;
-  team_id?: string; // Una persona pertenece a un solo equipo
+  team_id?: string | null; // Una persona pertenece a un solo equipo
   accepted?: boolean; // Aceptación de vinculación a la empresa
   
   // Datos adicionales
@@ -18,6 +18,7 @@ export interface Employee {
   dept?: string;
   dni_nie?: string;
   ss_number?: string;
+  weekly_hours?: number; // Horas semanales contratadas (almacenado en company_members)
   created_at?: string;
   plan_selected?: string; // Plan de suscripción
 }

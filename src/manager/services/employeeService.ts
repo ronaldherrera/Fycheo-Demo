@@ -14,19 +14,21 @@ export const employeeService = {
         role,
         team_id,
         accepted,
+        weekly_hours,
         profiles:user_id (*)
       `)
       .eq('company_id', companyId);
-      
+
     if (error) throw error;
-    
+
     // Aplanar respuesta para que parezca un Employee
     return data.map((item: any) => ({
         ...item.profiles, // Datos del perfil (nombre, email...)
         role: item.role,  // Rol ESPECÍFICO en esta empresa
         team_id: item.team_id, // Equipo en esta empresa
         company_id: companyId,
-        accepted: item.accepted
+        accepted: item.accepted,
+        weekly_hours: item.weekly_hours ?? 40,
     })) as Employee[];
   },
 
@@ -90,6 +92,7 @@ export const employeeService = {
     const memberUpdates: any = {};
     if (updates.role !== undefined) memberUpdates.role = updates.role;
     if (updates.team_id !== undefined) memberUpdates.team_id = updates.team_id;
+    if (updates.weekly_hours !== undefined) memberUpdates.weekly_hours = updates.weekly_hours;
 
     if (Object.keys(memberUpdates).length > 0) {
          const { error } = await supabase
@@ -102,7 +105,7 @@ export const employeeService = {
 
     // Si hay otros campos de perfil (nombre, etc), actualizar profiles
     // Filtrar campos que no son de profile
-    const { role, team_id, company_id, ...profileUpdates } = updates;
+    const { role, team_id, company_id, weekly_hours, ...profileUpdates } = updates;
     if (Object.keys(profileUpdates).length > 0) {
         const { error } = await supabase
             .from('profiles')
@@ -123,6 +126,7 @@ export const employeeService = {
         user_id,
         role,
         team_id,
+        weekly_hours,
         profiles:user_id (*)
       `)
       .eq('company_id', companyId)
@@ -148,7 +152,8 @@ export const employeeService = {
       team_id: data.team_id,
       company_id: companyId,
       dni_nie: profile?.dni_nie,
-      ss_number: profile?.ss_number
+      ss_number: profile?.ss_number,
+      weekly_hours: data.weekly_hours ?? 40,
     } as Employee;
   },
 

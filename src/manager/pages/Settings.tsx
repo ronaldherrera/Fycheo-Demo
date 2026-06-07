@@ -17,13 +17,7 @@ const Settings = () => {
   const initialDataRef = useRef<string>('');
 
   // Estados para tipos de jornada
-  const [shiftTypes, setShiftTypes] = useState([
-    { id: 'j-1', name: 'Mañana', color: 'bg-blue-500', hex: '#3b82f6', start: '08:00', end: '16:00', duration: '8h', isSplit: false, start2: '16:00', end2: '20:00', breakMins: 0, breakPaid: false, breakMins2: 0, breakPaid2: false, hasPlus: false },
-    { id: 'j-2', name: 'Tarde', color: 'bg-orange-500', hex: '#f97316', start: '16:00', end: '00:00', duration: '8h', isSplit: false, start2: '16:00', end2: '20:00', breakMins: 0, breakPaid: false, breakMins2: 0, breakPaid2: false, hasPlus: false },
-    { id: 'j-3', name: 'Noche', color: 'bg-purple-600', hex: '#9333ea', start: '00:00', end: '08:00', duration: '8h', isSplit: false, start2: '16:00', end2: '20:00', breakMins: 0, breakPaid: false, breakMins2: 0, breakPaid2: false, hasPlus: true },
-    { id: 'j-4', name: 'Partido', color: 'bg-emerald-500', hex: '#10b981', start: '10:00', end: '14:00', duration: '8h', isSplit: true, start2: '16:00', end2: '20:00', breakMins: 0, breakPaid: false, breakMins2: 0, breakPaid2: false, hasPlus: false },
-    { id: 'j-5', name: 'Refuerzo', color: 'bg-pink-400', hex: '#f472b6', start: '12:00', end: '16:00', duration: '4h', isSplit: false, start2: '16:00', end2: '20:00', breakMins: 0, breakPaid: false, breakMins2: 0, breakPaid2: false, hasPlus: false },
-  ]);
+  const [shiftTypes, setShiftTypes] = useState<any[]>([]);
   const [isShiftTypeModalOpen, setIsShiftTypeModalOpen] = useState(false);
   const [editingShiftTypeId, setEditingShiftTypeId] = useState<string | null>(null);
   const [shiftTypeForm, setShiftTypeForm] = useState({
@@ -148,7 +142,7 @@ const Settings = () => {
         const scheduleVal = settingsData.schedule || schedule;
         const generalVal = settingsData.general || generalSettings;
         const permissionsVal = settingsData.permissions || permissions;
-        const shiftTypesVal = settingsData.shift_types || shiftTypes;
+        const shiftTypesVal = settingsData.shift_types || [];
         const leavePoliciesVal = settingsData.leave_policies || [];
 
         setSchedule(scheduleVal as any);

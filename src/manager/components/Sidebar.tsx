@@ -172,40 +172,77 @@ const Sidebar = ({ isOpen = true, setIsOpen, isMobile = false }: SidebarProps) =
   const sidebarContent = (
       <>
         {/* Header: Fycheo Logo (Principal) */}
-        <div className="h-16 flex items-center px-6 border-b border-white/5 justify-between shrink-0">
-             <Link to="/manager" className={cn("flex items-center gap-2 transition-all", !isOpen && !isMobile && "w-0 opacity-0 overflow-hidden")}>
-                <img src={logo} alt="Fycheo" className="h-8 object-contain" />
+        <div className={cn(
+             "h-16 flex items-center border-b border-white/5 shrink-0 transition-all duration-300 relative",
+             isOpen || isMobile ? "justify-between px-6" : "justify-center px-0"
+        )}>
+             <Link to="/manager" className="flex items-center shrink-0 relative">
+                  <img 
+                      src="https://www.fycheo.es/brand/logotipo_mngr_bg-dark.svg" 
+                      alt="Fycheo" 
+                      className={cn(
+                          "h-8 object-contain transition-all duration-300 ease-in-out origin-left",
+                          isOpen || isMobile ? "opacity-100 max-w-[150px] scale-100" : "opacity-0 max-w-0 scale-90 pointer-events-none overflow-hidden"
+                      )} 
+                  />
+                  <img 
+                      src="https://www.fycheo.es/brand/favicon.png" 
+                      alt="Fycheo" 
+                      className={cn(
+                          "h-8 w-8 object-contain transition-all duration-300 ease-in-out origin-center absolute left-1/2 -translate-x-1/2",
+                          isOpen || isMobile ? "opacity-0 max-w-0 scale-90 pointer-events-none overflow-hidden" : "opacity-100 max-w-[32px] scale-100"
+                      )} 
+                  />
              </Link>
              
              {isMobile && setIsOpen ? (
-                 <button onClick={() => setIsOpen(false)} className="text-slate-400 hover:text-white transition-colors shrink-0 p-1.5 hover:bg-white/5 rounded-lg">
-                     <X size={20} />
-                 </button>
+                  <button onClick={() => setIsOpen(false)} className="text-slate-400 hover:text-white transition-colors shrink-0 p-1.5 hover:bg-white/5 rounded-lg">
+                      <X size={20} />
+                  </button>
              ) : (!isMobile && setIsOpen && (
-                 <button onClick={() => setIsOpen(!isOpen)} className="text-slate-400 hover:text-white transition-colors shrink-0 ml-2">
-                     {isOpen ? <ChevronRight className="rotate-180" /> : <ChevronRight />}
-                 </button>
+                  <button 
+                    onClick={() => setIsOpen(!isOpen)} 
+                    className={cn(
+                      "text-slate-400 hover:text-white transition-all duration-300 shrink-0 z-10",
+                      isOpen 
+                        ? "absolute right-4 top-1/2 -translate-y-1/2 bg-white/5 hover:bg-white/10 rounded-full p-1 border border-white/5" 
+                        : "absolute right-0 translate-x-1/2 top-1/2 -translate-y-1/2 bg-surface-dark border border-white/10 rounded-full p-1 shadow-md hover:bg-white/5 hover:scale-105"
+                    )}
+                  >
+                      <ChevronRight size={isOpen ? 16 : 14} className={cn("transition-transform duration-300", isOpen && "rotate-180")} />
+                  </button>
              ))}
         </div>
 
         {/* Sub-Header: Active Company Context */}
         {activeCompany && (
-            <div className={cn("px-4 py-4 border-b border-white/5", !isOpen && !isMobile && "px-2 py-2")}>
-                 <div className={cn("bg-white/5 rounded-xl p-3 flex items-center gap-3 transition-all group border border-white/5 hover:border-white/10", !isOpen && !isMobile && "p-2 justify-center")}>
+            <div className={cn(
+                "border-b border-white/5 transition-all duration-300",
+                isOpen || isMobile ? "px-4 py-4" : "px-3 py-4"
+            )}>
+                 <div className={cn(
+                     "rounded-xl flex items-center transition-all duration-300 group border overflow-hidden",
+                     isOpen || isMobile 
+                       ? "bg-white/5 p-3 border-white/5 hover:border-white/10" 
+                       : "bg-transparent p-1.5 border-transparent justify-center"
+                 )}>
                      <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0 overflow-hidden ring-1 ring-white/10">
-                          {activeCompany.logo_url ? (
-                              <img src={activeCompany.logo_url} alt={activeCompany.name} className="w-full h-full object-cover" />
-                          ) : (
-                              <Building2 size={16} />
-                          )}
+                           {activeCompany.logo_url ? (
+                               <img src={activeCompany.logo_url} alt={activeCompany.name} className="w-full h-full object-cover" />
+                           ) : (
+                               <Building2 size={16} />
+                           )}
                      </div>
-                     <div className={cn("flex flex-col min-w-0 overflow-hidden transition-all", !isOpen && !isMobile && "w-0 opacity-0 hidden")}>
-                          <span className="text-sm font-bold text-white truncate leading-tight">
-                              {activeCompany.name}
-                          </span>
-                          <button onClick={handleBackToHub} className="text-xs text-slate-400 hover:text-primary flex items-center gap-1 transition-colors text-left mt-0.5">
-                             <ArrowLeft size={10} /> Volver al Hub
-                          </button>
+                     <div className={cn(
+                           "flex flex-col min-w-0 transition-all duration-300 ease-in-out",
+                           isOpen || isMobile ? "ml-3 opacity-100 max-w-[200px]" : "ml-0 opacity-0 max-w-0 overflow-hidden pointer-events-none"
+                      )}>
+                           <span className="text-sm font-bold text-white truncate leading-tight whitespace-nowrap">
+                               {activeCompany.name}
+                           </span>
+                           <button onClick={handleBackToHub} className="text-xs text-slate-400 hover:text-primary flex items-center gap-1 transition-colors text-left mt-0.5 whitespace-nowrap">
+                              <ArrowLeft size={10} /> Volver al Hub
+                           </button>
                      </div>
                  </div>
             </div>
@@ -227,15 +264,22 @@ const Sidebar = ({ isOpen = true, setIsOpen, isMobile = false }: SidebarProps) =
                         isChildActive
                           ? 'bg-primary/20 text-white border-white/5'
                           : 'text-slate-400 hover:bg-white/5 hover:text-white',
-                        !isOpen && !isMobile && "justify-center px-2"
+                        !isOpen && !isMobile && "justify-center"
                       )}
                       title={!isOpen ? item.label : undefined}
                     >
                       <item.icon size={20} className={cn("shrink-0 transition-colors", isChildActive ? "text-primary" : "group-hover:text-primary")} />
-                      <span className={cn("ml-3 font-medium transition-all flex-1 text-left whitespace-nowrap", !isOpen && !isMobile && "hidden w-0 opacity-0")}>
+                      <span className={cn(
+                          "font-medium transition-all duration-300 ease-in-out text-left whitespace-nowrap overflow-hidden",
+                          isOpen || isMobile ? "ml-3 opacity-100 max-w-[180px] flex-1" : "ml-0 opacity-0 max-w-0 pointer-events-none"
+                      )}>
                         {item.label}
                       </span>
-                      <ChevronRight size={14} className={cn("shrink-0 transition-transform text-slate-500", docsOpen && "rotate-90", !isOpen && !isMobile && "hidden")} />
+                      <ChevronRight size={14} className={cn(
+                          "shrink-0 transition-all duration-300 text-slate-500",
+                          docsOpen && "rotate-90",
+                          isOpen || isMobile ? "opacity-100 scale-100" : "opacity-0 scale-0 w-0 overflow-hidden pointer-events-none"
+                      )} />
                     </button>
 
                     {docsOpen && (isOpen || isMobile) && (
@@ -279,7 +323,7 @@ const Sidebar = ({ isOpen = true, setIsOpen, isMobile = false }: SidebarProps) =
                       isActive
                         ? 'bg-primary/20 text-white border-white/5'
                         : 'text-slate-400 hover:bg-white/5 hover:text-white',
-                      !isOpen && !isMobile && "justify-center px-2"
+                      !isOpen && !isMobile && "justify-center"
                     )
                   }
                   title={!isOpen ? item.label : undefined}
@@ -287,11 +331,17 @@ const Sidebar = ({ isOpen = true, setIsOpen, isMobile = false }: SidebarProps) =
                   {({ isActive }) => (
                     <>
                       <item.icon size={20} className={cn("shrink-0 transition-colors", isActive ? "text-primary" : "group-hover:text-primary")} />
-                      <span className={cn("ml-3 font-medium transition-all whitespace-nowrap flex-1", !isOpen && !isMobile && "hidden w-0 opacity-0")}>
+                      <span className={cn(
+                          "font-medium transition-all duration-300 ease-in-out whitespace-nowrap overflow-hidden text-left flex-1",
+                          isOpen || isMobile ? "ml-3 opacity-100 max-w-[180px]" : "ml-0 opacity-0 max-w-0 pointer-events-none"
+                      )}>
                         {item.label}
                       </span>
-                      {item.badge > 0 && (isOpen || isMobile) && (
-                        <span className="ml-auto flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-white text-[10px] font-bold shrink-0">
+                      {item.badge > 0 && (
+                        <span className={cn(
+                            "flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-white text-[10px] font-bold shrink-0 transition-all duration-300",
+                            isOpen || isMobile ? "opacity-100 scale-100 ml-auto" : "opacity-0 scale-0 w-0 overflow-hidden pointer-events-none"
+                        )}>
                           {item.badge > 99 ? '99+' : item.badge}
                         </span>
                       )}
@@ -311,13 +361,16 @@ const Sidebar = ({ isOpen = true, setIsOpen, isMobile = false }: SidebarProps) =
                     unpublishedCount > 0 
                       ? "bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/20 border border-transparent"
                       : "bg-transparent border border-blue-500/50 text-blue-400 opacity-60 cursor-default",
-                    !isOpen && !isMobile && "justify-center px-0",
+                    !isOpen && !isMobile && "justify-center",
                     isPublishing && "opacity-50 pointer-events-none"
                 )}
                 title={!isOpen ? (unpublishedCount > 0 ? 'Publicar Cambios' : 'Sin cambios') : undefined}
             >
                 <Megaphone size={18} className={cn(isPublishing && "animate-pulse", unpublishedCount === 0 && "opacity-70")} />
-                <span className={cn("ml-1 whitespace-nowrap", !isOpen && !isMobile && "hidden w-0 opacity-0")}>
+                <span className={cn(
+                    "whitespace-nowrap transition-all duration-300 ease-in-out overflow-hidden",
+                    isOpen || isMobile ? "ml-2 opacity-100 max-w-[150px]" : "ml-0 opacity-0 max-w-0 pointer-events-none"
+                )}>
                     {isPublishing ? "Publicando..." : (unpublishedCount > 0 ? 'Publicar Cambios' : 'Sin cambios')}
                 </span>
             </button>
@@ -325,7 +378,7 @@ const Sidebar = ({ isOpen = true, setIsOpen, isMobile = false }: SidebarProps) =
 
         <div className="p-4 border-t border-white/5 shrink-0 flex flex-col gap-2">
             {profile && (
-                <div className={cn("flex items-center gap-3 px-2 transition-all", !isOpen && !isMobile && "justify-center px-0")}>
+                <div className={cn("flex items-center transition-all duration-300", !isOpen && !isMobile && "justify-center")}>
                     <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary shrink-0 overflow-hidden ring-1 ring-white/10">
                         {profile.avatar ? (
                             <img src={profile.avatar} alt={profile.full_name || profile.name} className="w-full h-full object-cover" />
@@ -333,7 +386,10 @@ const Sidebar = ({ isOpen = true, setIsOpen, isMobile = false }: SidebarProps) =
                             <span className="font-bold text-sm">{(profile.full_name || profile.name)?.charAt(0).toUpperCase()}</span>
                         )}
                     </div>
-                    <div className={cn("flex flex-col min-w-0 overflow-hidden transition-all", !isOpen && !isMobile && "w-0 opacity-0 hidden")}>
+                    <div className={cn(
+                        "flex flex-col min-w-0 transition-all duration-300 ease-in-out",
+                        isOpen || isMobile ? "ml-3 opacity-100 max-w-[150px]" : "ml-0 opacity-0 max-w-0 overflow-hidden pointer-events-none"
+                    )}>
                         <span className="text-sm font-medium text-white truncate">
                             {profile.full_name || profile.name}
                         </span>
@@ -347,12 +403,15 @@ const Sidebar = ({ isOpen = true, setIsOpen, isMobile = false }: SidebarProps) =
                 onClick={handleLogout}
                 className={cn(
                     "flex items-center w-full px-3 py-2.5 rounded-lg text-slate-400 hover:bg-red-500/10 hover:text-red-400 transition-colors group mt-2",
-                    !isOpen && !isMobile && "justify-center mt-0"
+                    !isOpen && !isMobile && "justify-center"
                 )}
                 title={!isOpen ? "Cerrar Sesión" : undefined}
             >
             <LogOut size={20} className="shrink-0" />
-            <span className={cn("ml-3 font-medium transition-all whitespace-nowrap", !isOpen && !isMobile && "hidden w-0 opacity-0")}>
+            <span className={cn(
+                "font-medium transition-all duration-300 ease-in-out whitespace-nowrap overflow-hidden",
+                isOpen || isMobile ? "ml-3 opacity-100 max-w-[150px]" : "ml-0 opacity-0 max-w-0 pointer-events-none"
+            )}>
                 Cerrar Sesión
             </span>
             </button>
