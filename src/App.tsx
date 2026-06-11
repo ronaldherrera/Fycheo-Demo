@@ -1,5 +1,34 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ minHeight: '100vh', background: '#0B0E14', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1rem' }}>
+          <p style={{ color: 'white', fontSize: '1rem' }}>Algo ha ido mal. Por favor, recarga la página.</p>
+          <button
+            onClick={() => { this.setState({ hasError: false }); window.location.reload(); }}
+            style={{ background: '#135BEC', color: 'white', padding: '0.5rem 1.5rem', borderRadius: '0.5rem', border: 'none', cursor: 'pointer' }}
+          >
+            Recargar
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 import DemoShell from './demo/DemoShell';
 import DemoGate from './demo/DemoGate';
 import ManagerRouter from './manager/ManagerRouter';
@@ -45,7 +74,7 @@ function App() {
 
   const path = typeof window !== 'undefined' ? window.location.pathname : '/';
 
-  if (path === ADMIN_PATH) return <AdminPanel />;
+  if (path === ADMIN_PATH) return <ErrorBoundary><AdminPanel /></ErrorBoundary>;
 
   if (isMobile) return <MobileBlock />;
 
@@ -67,7 +96,7 @@ function App() {
 
   // Manager y Kiosk no necesitan DemoGate (ya están autenticados vía DemoShell)
   const skipGate = path.startsWith('/manager') || path.startsWith('/kiosk');
-  return skipGate ? content : <DemoGate>{content}</DemoGate>;
+  return <ErrorBoundary>{skipGate ? content : <DemoGate>{content}</DemoGate>}</ErrorBoundary>;
 }
 
 export default App;
