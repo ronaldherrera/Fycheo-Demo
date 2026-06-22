@@ -18,8 +18,8 @@ async function showNotification(startTime: Date, silent: boolean) {
     body: elapsed < 10_000
       ? 'Descanso iniciado'
       : `Llevas ${formatElapsed(startTime)} descansando`,
-    icon: '/icon-192.png',
-    badge: '/icon-192.png',
+    icon: 'https://fycheo.es/brand/icono.png',
+    badge: 'https://fycheo.es/brand/icono.png',
     tag: 'descanso-activo',
     renotify: false,
     silent,

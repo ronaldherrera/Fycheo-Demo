@@ -71,8 +71,8 @@ const LoginScreen: React.FC = () => {
       <div className="w-full max-w-[480px] h-full flex flex-col relative">
         <div className="flex flex-col items-center justify-center py-8">
           <div className="mb-8 transform hover:scale-105 transition-transform duration-300 flex justify-center">
-             <img src="/fycheo_negro.svg" alt="Fycheo" className="h-12 w-auto object-contain dark:hidden" />
-             <img src="/fycheo_blanco.svg" alt="Fycheo" className="h-12 w-auto object-contain hidden dark:block" />
+             <img src="https://fycheo.es/brand/logotipo_bg-light.svg" alt="Fycheo" className="h-12 w-auto object-contain dark:hidden" />
+             <img src="https://fycheo.es/brand/logotipo_bg-dark.svg" alt="Fycheo" className="h-12 w-auto object-contain hidden dark:block" />
           </div>
           
           <h1 className="text-2xl font-bold tracking-tight text-center text-slate-900 dark:text-white/90">

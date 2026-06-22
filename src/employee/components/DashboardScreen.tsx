@@ -8,7 +8,7 @@
  * - Botones "Otros" del modal con type="button" + disabled + estilo opaco.
  */
 
-import React, { useEffect, useMemo, useState, useContext, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useContext, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { AppContext } from '../EmployeeApp';
 import { useNotifications } from "../contexts/NotificationsContext";
@@ -233,11 +233,30 @@ const DashboardScreen: React.FC = () => {
 
   // Chat efímero
   const [showChatPanel, setShowChatPanel] = useState(false);
+  const showChatPanelRef = useRef(false);
+  useEffect(() => { showChatPanelRef.current = showChatPanel; }, [showChatPanel]);
   const [unreadChatCount, setUnreadChatCount] = useState(0);
 
-  // Panel de Tareas
   const [showTasksPanel, setShowTasksPanel] = useState(false);
+  const showTasksPanelRef = useRef(false);
+  useEffect(() => { showTasksPanelRef.current = showTasksPanel; }, [showTasksPanel]);
   const [pendingTasksCount, setPendingTasksCount] = useState(0);
+  const [pendingNoticesCount, setPendingNoticesCount] = useState(0);
+
+  const lastOpenedTasksAtRef = useRef<string | null>(null);
+  const tasksChannelRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (user?.user_metadata?.last_opened_tasks_at) {
+      lastOpenedTasksAtRef.current = user.user_metadata.last_opened_tasks_at;
+    }
+  }, [user]);
+
+  const handlePendingChange = useCallback((total: number, notices: number) => {
+    setPendingTasksCount(total);
+    setPendingNoticesCount(showTasksPanelRef.current ? 0 : notices);
+  }, []);
+
 
   // Conteo de compañeros trabajando ahora
   const [workingCount, setWorkingCount] = useState(0);
@@ -247,54 +266,44 @@ const DashboardScreen: React.FC = () => {
   useEffect(() => {
     if (!user?.id || !activeCompanyId) return;
 
-    // Carga inicial: cuántos mensajes sin leer hay para este usuario
-    const loadInitialUnread = async () => {
-      const { count } = await supabase
+    const loadUnreadChatCount = () => {
+      supabase
         .from('ephemeral_messages')
         .select('id', { count: 'exact', head: true })
         .eq('receiver_id', user.id)
         .eq('company_id', activeCompanyId)
-        .is('read_at', null);
-      setUnreadChatCount(count ?? 0);
+        .is('read_at', null)
+        .then(({ count }) => setUnreadChatCount(count ?? 0));
     };
-    loadInitialUnread();
 
-    // Suscripción realtime: +1 al llegar un mensaje nuevo (cuando el panel está cerrado)
+    // Carga inicial: cuántos mensajes sin leer hay para este usuario
+    loadUnreadChatCount();
+
+    // Suscripción realtime: recalcular al llegar un cambio
     const channel = supabase
       .channel(`dashboard:chat:unread:${user.id}`)
       .on(
         'postgres_changes',
         {
-          event: 'INSERT',
+          event: '*',
           schema: 'public',
           table: 'ephemeral_messages',
           filter: `receiver_id=eq.${user.id}`,
         },
-        () => {
-          // Solo incrementar si el ChatPanel NO está abierto (si está abierto, él gestiona los mensajes)
-          setShowChatPanel(open => {
-            if (!open) setUnreadChatCount(prev => prev + 1);
-            return open;
-          });
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'DELETE',
-          schema: 'public',
-          table: 'ephemeral_messages',
-          filter: `receiver_id=eq.${user.id}`,
-        },
-        () => {
-          // Al borrar (leer) mensajes, recalcular el total real
-          supabase
-            .from('ephemeral_messages')
-            .select('id', { count: 'exact', head: true })
-            .eq('receiver_id', user.id)
-            .eq('company_id', activeCompanyId)
-            .is('read_at', null)
-            .then(({ count }) => setUnreadChatCount(count ?? 0));
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            const newMsg = payload.new as { id: string };
+            supabase
+              .from('ephemeral_messages')
+              .update({ delivered_at: new Date().toISOString() })
+              .eq('id', newMsg.id);
+          }
+          
+          if (!showChatPanelRef.current) {
+            loadUnreadChatCount();
+          } else {
+            setUnreadChatCount(0);
+          }
         }
       )
       .subscribe();
@@ -317,6 +326,19 @@ const DashboardScreen: React.FC = () => {
       document.activeElement.blur();
     }
     setShowTasksPanel(false);
+    
+    const nowStr = new Date().toISOString();
+    lastOpenedTasksAtRef.current = nowStr;
+    supabase.auth.updateUser({ data: { last_opened_tasks_at: nowStr } });
+    
+    if (tasksChannelRef.current) {
+      tasksChannelRef.current.send({
+        type: 'broadcast',
+        event: 'tasks_opened',
+        payload: { openedAt: nowStr }
+      });
+    }
+    setPendingNoticesCount(0);
   };
 
   const handleToggleChatPanel = () => {
@@ -332,6 +354,18 @@ const DashboardScreen: React.FC = () => {
     if (showTasksPanel) {
       closeTasksPanel();
     } else {
+      const nowStr = new Date().toISOString();
+      lastOpenedTasksAtRef.current = nowStr;
+      supabase.auth.updateUser({ data: { last_opened_tasks_at: nowStr } });
+      
+      if (tasksChannelRef.current) {
+        tasksChannelRef.current.send({
+          type: 'broadcast',
+          event: 'tasks_opened',
+          payload: { openedAt: nowStr }
+        });
+      }
+      setPendingNoticesCount(0);
       setShowTasksPanel(true);
       setShowChatPanel(false); // Asegura cerrar el otro
     }
@@ -438,15 +472,30 @@ const DashboardScreen: React.FC = () => {
     };
   }, []);
 
-  // Cargar conteo de tareas pendientes (para el badge)
+  // Cargar conteo de tareas y avisos pendientes
   const loadPendingTasksCount = useCallback(() => {
     if (!user?.id) return;
     supabase
       .from('tasks')
-      .select('id', { count: 'exact', head: true })
+      .select('id, type, created_at')
       .eq('assigned_to', user.id)
       .eq('status', 'pending')
-      .then(({ count }) => setPendingTasksCount(count ?? 0));
+      .then(({ data }) => {
+        const list = data || [];
+        setPendingTasksCount(list.length);
+        
+        if (showTasksPanelRef.current) {
+          setPendingNoticesCount(0);
+        } else {
+          const lastOpenedStr = lastOpenedTasksAtRef.current || user?.user_metadata?.last_opened_tasks_at;
+          const lastOpenedTime = lastOpenedStr ? new Date(lastOpenedStr).getTime() : 0;
+          const newNotices = list.filter(t => {
+            const createdAtTime = new Date(t.created_at).getTime();
+            return createdAtTime > lastOpenedTime;
+          }).length;
+          setPendingNoticesCount(newNotices);
+        }
+      });
   }, [user?.id]);
 
   useEffect(() => {
@@ -468,10 +517,26 @@ const DashboardScreen: React.FC = () => {
           loadPendingTasksCount();
         }
       )
+      .on(
+        'broadcast',
+        { event: 'tasks_opened' },
+        (payload) => {
+          const openedAt = payload.payload.openedAt;
+          lastOpenedTasksAtRef.current = openedAt;
+          if (!showTasksPanelRef.current) {
+            loadPendingTasksCount();
+          } else {
+            setPendingNoticesCount(0);
+          }
+        }
+      )
       .subscribe();
+
+    tasksChannelRef.current = channel;
 
     return () => {
       supabase.removeChannel(channel);
+      tasksChannelRef.current = null;
     };
   }, [user?.id, loadPendingTasksCount]);
 
@@ -1801,7 +1866,7 @@ const DashboardScreen: React.FC = () => {
                   }}
                 >
                   <span className="material-symbols-outlined" style={{ fontSize: 15 }}>forum</span>
-                  Compañeros{workingCount > 0 && ` (${workingCount})`}
+                  Chat{workingCount > 0 && ` (${workingCount})`}
                   {unreadChatCount > 0 && (
                     <span style={{
                       position: 'absolute', top: -5, right: -5,
@@ -1816,7 +1881,6 @@ const DashboardScreen: React.FC = () => {
                   )}
                 </button>
 
-                {/* Tareas */}
                 <button
                   onClick={handleToggleTasksPanel}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-95 relative"
@@ -1830,6 +1894,28 @@ const DashboardScreen: React.FC = () => {
                 >
                   <span className="material-symbols-outlined" style={{ fontSize: 15 }}>checklist</span>
                   Tareas{pendingTasksCount > 0 && ` (${pendingTasksCount > 9 ? '9+' : pendingTasksCount})`}
+                  {pendingNoticesCount > 0 && (
+                    <span style={{
+                      position: 'absolute',
+                      top: -6,
+                      right: -6,
+                      background: 'linear-gradient(135deg,#f59e0b,#d97706)',
+                      color: '#fff',
+                      fontSize: 9,
+                      fontWeight: 'bold',
+                      borderRadius: 10,
+                      width: 17,
+                      height: 17,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      border: '1.5px solid #0f172a',
+                      lineHeight: 1,
+                      boxSizing: 'border-box',
+                    }}>
+                      {pendingNoticesCount > 9 ? '9+' : pendingNoticesCount}
+                    </span>
+                  )}
                 </button>
               </div>
             )}
@@ -2395,7 +2481,9 @@ const DashboardScreen: React.FC = () => {
             <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 4px' }}>
               <div style={{ width: 36, height: 4, borderRadius: 2, background: 'rgba(148,163,184,0.2)' }} />
             </div>
-            <TasksPanel onPendingChange={setPendingTasksCount} />
+            <TasksPanel 
+              onPendingChange={handlePendingChange} 
+            />
           </div>
         </div>
       )}

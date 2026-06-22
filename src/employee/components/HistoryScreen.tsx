@@ -95,16 +95,31 @@ const HistoryScreen: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [historyEntries, setHistoryEntries] = useState<any[]>([]);
   const [plannedShifts, setPlannedShifts] = useState<any[]>([]);
+  const [expandedShifts, setExpandedShifts] = useState<Record<string, boolean>>({});
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [loadingShifts, setLoadingShifts] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [activeTab, setActiveTab] = useState<'activity' | 'shifts'>('shifts');
   const [isTeamMode, setIsTeamMode] = useState(false);
   const [monthShifts, setMonthShifts] = useState<Record<string, any>>({});
   const [monthHolidays, setMonthHolidays] = useState<Record<string, any>>({});
   const [companySchedule, setCompanySchedule] = useState<Record<string, any>>({});
+  const [companyShiftTypes, setCompanyShiftTypes] = useState<any[]>([]);
   const [teamMembers, setTeamMembers] = useState<any[]>([]);
   const [teamShifts, setTeamShifts] = useState<Record<string, any[]>>({});
+
+  const getShiftColor = (shift: any) => {
+    if (!shift) return null;
+    const typeName = shift.shift_type;
+    if (typeName && companyShiftTypes && companyShiftTypes.length > 0) {
+      const matchedType = companyShiftTypes.find(
+        (t: any) => t.name?.toLowerCase() === typeName.toLowerCase()
+      );
+      if (matchedType) {
+        return matchedType.hex || matchedType.color || shift.color;
+      }
+    }
+    return shift.color;
+  };
 
   // Form states
   const [editingEntry, setEditingEntry] = useState<any>(null);
@@ -163,6 +178,32 @@ const HistoryScreen: React.FC = () => {
           if (record && record.user_id === user.id) {
              setRefreshKey(prev => prev + 1);
           }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'shifts',
+        },
+        (payload) => {
+          const record = (payload.new as any) || (payload.old as any);
+          if (record && record.company_id === activeCompanyId) {
+             setRefreshKey(prev => prev + 1);
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'companies',
+          filter: `id=eq.${activeCompanyId}`,
+        },
+        (payload) => {
+          setRefreshKey(prev => prev + 1);
         }
       )
       .subscribe();
@@ -258,6 +299,8 @@ const HistoryScreen: React.FC = () => {
 
         const schedule = settingsRes.data?.settings?.schedule || {};
         setCompanySchedule(schedule);
+        const shiftTypes = settingsRes.data?.settings?.shift_types || [];
+        setCompanyShiftTypes(shiftTypes);
 
         if (holidaysRes.data) {
           const hMap: Record<string, any> = {};
@@ -302,7 +345,7 @@ const HistoryScreen: React.FC = () => {
       }
     };
     fetchMonthData();
-  }, [user?.id, activeCompanyId, currentDate]);
+  }, [user?.id, activeCompanyId, currentDate, refreshKey]);
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -941,6 +984,23 @@ const HistoryScreen: React.FC = () => {
     ];
   }, [historyEntries, selectedDate]);
 
+  const filteredEntries = useMemo(() => {
+    return historyEntries.filter((e, idx) => {
+      const type = (e.entry_type ?? "").toLowerCase();
+      if (type === 'break-start') {
+        const nextEntry = idx > 0 ? historyEntries[idx - 1] : null;
+        const nextType = (nextEntry?.entry_type ?? "").toLowerCase();
+        return nextType === 'break-end' || nextType === 'clock-in';
+      }
+      if (type === 'others-out') {
+        const nextEntry = idx > 0 ? historyEntries[idx - 1] : null;
+        const nextType = (nextEntry?.entry_type ?? "").toLowerCase();
+        return nextType === 'others-in' || nextType === 'clock-in';
+      }
+      return true;
+    });
+  }, [historyEntries]);
+
   const renderMiniDonut = () => {
     let cumulativePercent = 0;
     const size = 80;
@@ -1078,7 +1138,7 @@ const HistoryScreen: React.FC = () => {
               const dayKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(item.day).padStart(2, '0')}`;
               const dayShift = monthShifts[dayKey];
               const dayHoliday = monthHolidays[dayKey];
-              const shiftStyle = dayShift ? getShiftStyle(dayShift.color) : null;
+              const shiftStyle = dayShift ? getShiftStyle(getShiftColor(dayShift)) : null;
 
               const currentDayOfWeek = new Date(currentDate.getFullYear(), currentDate.getMonth(), item.day).getDay();
               const dayKeys = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
@@ -1118,7 +1178,9 @@ const HistoryScreen: React.FC = () => {
                     {item.day}
                   </span>
                   {isTeamMode && hasTeamShift && (
-                    <div className="absolute bottom-1.5 w-1.5 h-1.5 rounded-full bg-primary" />
+                    <span className="text-[8px] font-bold leading-none mt-0.5 text-primary">
+                      {teamShifts[dayKey].length}
+                    </span>
                   )}
                 </button>
               );
@@ -1156,7 +1218,7 @@ const HistoryScreen: React.FC = () => {
                     if (!member) return null;
                     const startTimeStr = shift.start_time ? shift.start_time.substring(0, 5) : '--:--';
                     const endTimeStr = shift.end_time ? shift.end_time.substring(0, 5) : '--:--';
-                    const s = getShiftStyle(shift.color);
+                    const s = getShiftStyle(getShiftColor(shift));
                     
                     return (
                       <div key={idx} className={`relative overflow-hidden rounded-2xl border ${s.card} flex items-center p-3 gap-3`}>
@@ -1184,301 +1246,273 @@ const HistoryScreen: React.FC = () => {
               )}
             </div>
           ) : (
-            <>
-              {/* Tab Switch */}
-              <div className="flex bg-slate-100 dark:bg-slate-950/60 rounded-xl p-1 gap-1 border border-slate-200 dark:border-slate-800/80">
-            <button
-              onClick={() => setActiveTab('shifts')}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all border-none cursor-pointer ${
-                activeTab === 'shifts'
-                  ? 'bg-white dark:bg-[#2a364f] text-slate-900 dark:text-white shadow-sm ring-1 ring-black/5 dark:ring-white/10'
-                  : 'bg-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
-              }`}
-            >
-              Programación
-            </button>
-            <button
-              onClick={() => setActiveTab('activity')}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all border-none cursor-pointer ${
-                activeTab === 'activity'
-                  ? 'bg-white dark:bg-[#2a364f] text-slate-900 dark:text-white shadow-sm ring-1 ring-black/5 dark:ring-white/10'
-                  : 'bg-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
-              }`}
-            >
-              Registros
-            </button>
-          </div>
-
-          {/* Turnos Planificados Tab */}
-          {activeTab === 'shifts' && (
-            <div className="space-y-3">
-              {loadingShifts ? (
-                <div className="flex justify-center py-10">
-                  <span className="material-symbols-outlined text-4xl text-slate-300 dark:text-slate-600 animate-spin">progress_activity</span>
-                </div>
-              ) : plannedShifts.length === 0 && !monthHolidays[isoDate(selectedDate)] ? (
-                <div className="flex flex-col items-center justify-center py-10 text-slate-400 dark:text-slate-600">
-                  <span className="material-symbols-outlined text-4xl mb-2">event_busy</span>
-                  <p className="text-sm font-medium">No hay turnos planificados este día</p>
-                </div>
-              ) : (
-                <>
-                  {monthHolidays[isoDate(selectedDate)] && (
-                    <div className={`relative overflow-hidden rounded-2xl border ${monthHolidays[isoDate(selectedDate)].bgClass}`}>
-                      <div className={`absolute left-0 top-0 bottom-0 w-1 ${monthHolidays[isoDate(selectedDate)].barClass}`} />
-                      <div className="flex items-center gap-3 px-4 py-4">
-                        <div className={`size-9 shrink-0 rounded-xl flex items-center justify-center ${monthHolidays[isoDate(selectedDate)].iconClass}`}>
-                          <span className="material-symbols-outlined text-[18px]">celebration</span>
-                        </div>
-                        <div className="flex-1">
-                          <p className="font-bold text-sm text-slate-900 dark:text-white">{monthHolidays[isoDate(selectedDate)].name || 'Día Festivo'}</p>
-                          <p className={`text-xs mt-0.5 font-medium ${monthHolidays[isoDate(selectedDate)].color}`}>{monthHolidays[isoDate(selectedDate)].context}</p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  {plannedShifts.map((shift, idx) => {
-                  const startTimeStr = shift.start_time ? shift.start_time.substring(0, 5) : '--:--';
-                  const endTimeStr = shift.end_time ? shift.end_time.substring(0, 5) : '--:--';
-                  const s = getShiftStyle(shift.color);
-
-                  // Parsear descanso — soporta formato simple y por tramo (T1/T2)
-                  const notes = shift.notes || '';
-                  const t2Match = notes.match(/\(Descanso T2:\s*(\d+)\s*min\s*-\s*([^)]+)\)/i);
-                  const t1Match = notes.match(/\(Descanso T1:\s*(\d+)\s*min\s*-\s*([^)]+)\)/i) || notes.match(/\(Descanso:\s*(\d+)\s*min\s*-\s*([^)]+)\)/i);
-                  // El break que extiende la salida es el del último tramo
-                  const breakMins = t2Match ? parseInt(t2Match[1]) : (t1Match ? parseInt(t1Match[1]) : 0);
-                  const breakPaid = t2Match ? t2Match[2].toLowerCase().includes('pagado') : (t1Match ? t1Match[2].toLowerCase().includes('pagado') : false);
-                  const totalBreakMins = (t1Match ? parseInt(t1Match[1]) : 0) + (t2Match ? parseInt(t2Match[1]) : 0);
-                  const displayNotes = notes.replace(/\(Descanso T[12]:[^)]+\)/gi, '').replace(/\(Descanso:[^)]+\)/i, '').trim() || null;
-
-                  // Calcular horas trabajadas y hora de salida real
-                  const [sH, sM] = (shift.start_time || '00:00').split(':').map(Number);
-                  const [eH, eM] = (shift.end_time || '00:00').split(':').map(Number);
-                  let totalMins = (eH * 60 + eM) - (sH * 60 + sM);
-                  if (totalMins < 0) totalMins += 24 * 60;
-                  // Si no retribuido: el empleado trabaja totalMins + sale breakMins más tarde
-                  // Si retribuido: el descanso está dentro del horario, sale a end_time
-                  const workedMins = totalMins;
-                  const realEndMins = !breakPaid && breakMins > 0 ? eH * 60 + eM + breakMins : eH * 60 + eM;
-                  const realEndStr = `${String(Math.floor(realEndMins / 60) % 24).padStart(2, '0')}:${String(realEndMins % 60).padStart(2, '0')}`;
-                  const workedLabel = workedMins >= 60
-                    ? `${Math.floor(workedMins / 60)}h${workedMins % 60 > 0 ? ` ${workedMins % 60}m` : ''}`
-                    : `${workedMins}m`;
-
-                  return (
-                    <div key={idx} className={`relative overflow-hidden rounded-2xl border ${s.card}`}>
-                      <div className={`absolute left-0 top-0 bottom-0 w-1 ${s.bar}`} />
-                      {/* Cabecera */}
-                      <div className="flex items-center gap-3 px-4 pt-4 pb-3">
-                        <div className={`size-9 shrink-0 rounded-xl flex items-center justify-center ${s.iconBg}`}>
-                          <span className={`material-symbols-outlined text-[18px] ${s.iconText}`}>schedule</span>
-                        </div>
-                        <div className="flex-1">
-                          <p className={`font-bold text-sm ${s.title}`}>{startTimeStr} — {endTimeStr}</p>
-                          {displayNotes && <p className={`text-xs mt-0.5 line-clamp-1 ${s.notes}`}>{displayNotes}</p>}
-                        </div>
-                        <span className={`text-xs font-black ${s.iconText}`}>{workedLabel}</span>
-                      </div>
-                      {/* Detalles */}
-                      <div className={`mx-4 mb-4 grid grid-cols-3 gap-2 pt-3 border-t ${s.card.split(' ')[1]}`}>
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Entrada</span>
-                          <span className={`text-xs font-bold ${s.title}`}>{startTimeStr}</span>
-                        </div>
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Salida</span>
-                          <span className={`text-xs font-bold ${s.title}`}>{realEndStr}</span>
-                        </div>
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Descanso</span>
-                          <span className={`text-xs font-bold ${s.title}`}>
-                            {totalBreakMins > 0 ? `${totalBreakMins}m` : 'Sin descanso'}
-                          </span>
-                        </div>
-                      </div>
-                      {totalBreakMins > 0 && (
-                        <div className="mx-4 mb-3 flex items-center gap-1.5">
-                          <span className={`material-symbols-outlined text-[13px] ${breakPaid ? 'text-emerald-500' : 'text-slate-400 dark:text-slate-500'}`}>
-                            {breakPaid ? 'check_circle' : 'info'}
-                          </span>
-                          <span className={`text-[10px] ${breakPaid ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'}`}>
-                            Descanso {breakPaid ? 'retribuido' : 'no retribuido'}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-                </>
-              )}
-            </div>
-          )}
-
-          {/* Actividad Tab */}
-          {activeTab === 'activity' && (
-          <>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between px-1">
-              <h4 className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Registros de Actividad</h4>
-              <button
-                onClick={() => setIsEditingHistory(!isEditingHistory)}
-                className={`text-xs font-bold transition-colors cursor-pointer border-none bg-transparent ${isEditingHistory ? 'text-primary' : 'text-slate-400 hover:text-slate-600'}`}
-              >
-                {isEditingHistory ? 'Terminar' : 'Editar'}
-              </button>
-            </div>
-
-
-            {historyEntries.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 text-slate-400 dark:text-slate-600">
-                <span className="material-symbols-outlined text-4xl mb-2">history_toggle_off</span>
-                <p className="text-sm font-medium">No hay actividad este día</p>
-              </div>
-            ) : (
-              historyEntries.map((e, idx) => {
-                const meta = typeMeta(e.entry_type);
-                const c = colorClasses(meta.color);
-                
-                const occurred = e.occurred_at ? new Date(e.occurred_at) : new Date(e.created_at);
-                const timeCell = occurred.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-
-                // Duración
-                let durationLabel = null;
-                const type = (e.entry_type ?? "").toLowerCase();
-                
-                 if (
-                  type === "clock-in" ||
-                  type === "break-start" ||
-                  type === "clock-out" ||
-                  type === "others-out" ||
-                  type === "break-end" ||
-                  type === "others-in"
-                ) {
-                  const msCurrent = occurred.getTime();
-                  const parsedNext = idx > 0 ? historyEntries[idx - 1] : null;
-                  let msNext = new Date().getTime(); // Default to now if latest
-                  
-                  // Si no es hoy, y es el último registro, quizás deberíamos cerrar el día o no mostrar tiempo?
-                  // Por simplicidad, si es el último del día mostrado (el más reciente) y es el día actual, usamos "ahora".
-                  // Si es un día pasado, usamos fin del día o siguiente entrada.
-                  // Simplificación: Usamos logica dashboard
-                  
-                  if (parsedNext) {
-                     msNext = parsedNext.occurred_at
-                      ? new Date(parsedNext.occurred_at).getTime()
-                      : new Date(parsedNext.created_at).getTime();
-                  } else if (!isToday(selectedDate.getDate())) {
-                      // Si es el ultimo registro de un dia PASADO, no calculamos duración "hasta ahora"
-                      // Podríamos setearlo a null o fin de jornada. Lo dejamos null para no mostrar info errónea.
-                      durationLabel = null; 
-                  }
-                  
-                  if (parsedNext || isToday(selectedDate.getDate())) {
-                     const diff = msNext - msCurrent;
-                     if (diff > 0) {
-                        durationLabel = minutesToLabel(Math.floor(diff / 1000 / 60));
-                     }
-                  }
-                }
-
-                // FILTRADO DE INTERVALOS ABIERTOS (User Request: "si no tengo retorno no se muestre")
-                if (type === 'break-start') {
-                    // Solo mostramos 'Inicio descanso' si el registro INMEDIATAMENTE ANTERIOR (más nuevo) es 'break-end' O 'clock-in'
-                    const nextEntry = idx > 0 ? historyEntries[idx - 1] : null;
-                    const nextType = (nextEntry?.entry_type ?? "").toLowerCase();
-                    if (nextType !== 'break-end' && nextType !== 'clock-in') return null;
-                }
-
-                if (type === 'others-out') {
-                    // Igual para permisos
-                    const nextEntry = idx > 0 ? historyEntries[idx - 1] : null;
-                    const nextType = (nextEntry?.entry_type ?? "").toLowerCase();
-                    if (nextType !== 'others-in' && nextType !== 'clock-in') return null; 
-                }
-
-                // Se muestran todos los eventos (incluyendo break-end y others-in)
-                // if (type === 'break-end' || type === 'others-in') return null;
-
-                const stateTitles: Record<string, string> = {
-                  "clock-in": "Trabajando",
-                  "clock-out": "Salida",
-                  "break-start": "Descanso",
-                  "break-end": "Trabajando",
-                  "others-in": "Trabajando",
-                };
-
-                const isStandard = Object.keys(stateTitles).includes(type);
-                let displayLabel = isStandard ? stateTitles[type] : e.description ?? meta.label;
-                 if (type === "others-out") {
-                   const rawDesc = e.description || "";
-                   displayLabel = rawDesc.replace(/^Permiso:\s*/i, "").replace(/^Salida:\s*/i, "") || "Permiso";
-                }
-
-                return (
-                  <div 
-                    key={e.id} 
-                    className={`flex items-center gap-4 p-3 rounded-xl border-l-4 ${c.border} bg-white dark:bg-surface-dark shadow-sm group animate-fadeInUp`}
-                    style={{ animationDelay: `${idx * 0.05}s`, animationFillMode: 'both' }}
-                  >
-                    <div className={`size-10 rounded-full ${c.iconBg} flex items-center justify-center shrink-0`}>
-                      <span className={`material-symbols-outlined text-xl ${c.iconText}`}>{meta.icon}</span>
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <p className="font-bold text-slate-800 dark:text-slate-100 text-sm">{displayLabel}</p>
-                        {e.companies?.name && (
-                          <span className="text-[9px] font-bold bg-indigo-500/10 text-indigo-500 dark:text-indigo-400 dark:bg-indigo-500/20 px-1.5 py-0.5 rounded-md leading-none">
-                            {e.companies.name}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <p className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold">{timeCell} • {meta.label}</p>
-                        {e.status === 'pending' && (
-                          <span className="text-[9px] font-bold bg-amber-500/10 text-amber-500 px-1.5 py-0.5 rounded-md border border-amber-500/20 leading-none flex items-center gap-0.5">
-                            Pendiente
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                       {durationLabel && (
-                          <span className="text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-md transition-all">
-                           {durationLabel}
-                          </span>
-                       )}
-                      
-                      <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isEditingHistory ? 'w-8 opacity-100 ml-1' : 'w-0 opacity-0 ml-0'}`}>
-                        {e.id === latestGlobalId ? (
-                          <button 
-                            onClick={() => handleDelete(e.id)}
-                            className="size-8 rounded-lg bg-slate-50 dark:bg-white/5 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all cursor-pointer border-none shrink-0" 
-                            title="Eliminar último registro"
-                          >
-                            <span className="material-symbols-outlined text-[18px]">delete</span>
-                          </button>
-                        ) : (
-                          <button 
-                            onClick={() => openEditModal(e)}
-                            className="size-8 rounded-lg bg-slate-50 dark:bg-white/5 flex items-center justify-center text-slate-400 hover:text-primary hover:bg-primary/10 transition-all cursor-pointer border-none shrink-0" 
-                            title="Editar registro"
-                          >
-                            <span className="material-symbols-outlined text-[18px]">edit</span>
-                          </button>
-                        )}
-                      </div>
-                    </div>
+            <div className="space-y-4">
+              {/* Programación */}
+              <div className="space-y-1.5">
+                {loadingShifts ? (
+                  <div className="flex justify-center py-10">
+                    <span className="material-symbols-outlined text-4xl text-slate-300 dark:text-slate-600 animate-spin">progress_activity</span>
                   </div>
-                );
-              })
-            )}
-          </div>
+                ) : plannedShifts.length === 0 && !monthHolidays[isoDate(selectedDate)] ? (
+                  <div className="relative overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700/50 flex items-center gap-3 px-4 py-2.5">
+                    <div className="size-9 shrink-0 rounded-xl flex items-center justify-center bg-slate-100 dark:bg-slate-800">
+                      <span className="material-symbols-outlined text-[18px] text-slate-400 dark:text-slate-500">event_busy</span>
+                    </div>
+                    <p className="text-sm font-medium text-slate-400 dark:text-slate-500">Sin turno planificado</p>
+                  </div>
+                ) : (
+                  <>
+                    {monthHolidays[isoDate(selectedDate)] && (
+                      <div className={`relative overflow-hidden rounded-2xl border ${monthHolidays[isoDate(selectedDate)].bgClass}`}>
+                        <div className={`absolute left-0 top-0 bottom-0 w-1 ${monthHolidays[isoDate(selectedDate)].barClass}`} />
+                        <div className="flex items-center gap-3 px-4 py-4">
+                          <div className={`size-9 shrink-0 rounded-xl flex items-center justify-center ${monthHolidays[isoDate(selectedDate)].iconClass}`}>
+                            <span className="material-symbols-outlined text-[18px]">celebration</span>
+                          </div>
+                          <div className="flex-1">
+                            <p className="font-bold text-sm text-slate-900 dark:text-white">{monthHolidays[isoDate(selectedDate)].name || 'Día Festivo'}</p>
+                            <p className={`text-xs mt-0.5 font-medium ${monthHolidays[isoDate(selectedDate)].color}`}>{monthHolidays[isoDate(selectedDate)].context}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    {plannedShifts.map((shift) => {
+                      const startTimeStr = shift.start_time ? shift.start_time.substring(0, 5) : '--:--';
+                      const endTimeStr = shift.end_time ? shift.end_time.substring(0, 5) : '--:--';
+                      const s = getShiftStyle(getShiftColor(shift));
 
-          </>
-          )}
+                      // Parsear descanso — soporta formato simple y por tramo (T1/T2)
+                      const notes = shift.notes || '';
+                      const t2Match = notes.match(/\(Descanso T2:\s*(\d+)\s*min\s*-\s*([^)]+)\)/i);
+                      const t1Match = notes.match(/\(Descanso T1:\s*(\d+)\s*min\s*-\s*([^)]+)\)/i) || notes.match(/\(Descanso:\s*(\d+)\s*min\s*-\s*([^)]+)\)/i);
+                      // El break que extiende la salida es el del último tramo
+                      const breakMins = t2Match ? parseInt(t2Match[1]) : (t1Match ? parseInt(t1Match[1]) : 0);
+                      const isPaid = (str: string) => { const l = str.toLowerCase(); return l.includes('pagado') && !l.includes('no pagado'); };
+                      const breakPaid = t2Match ? isPaid(t2Match[2]) : (t1Match ? isPaid(t1Match[2]) : false);
+                      const totalBreakMins = (t1Match ? parseInt(t1Match[1]) : 0) + (t2Match ? parseInt(t2Match[1]) : 0);
+                      const displayNotes = notes.replace(/\(Descanso T[12]:[^)]+\)/gi, '').replace(/\(Descanso:[^)]+\)/i, '').trim() || null;
 
-            </>
+                      // Calcular horas trabajadas y hora de salida real
+                      const [sH, sM] = (shift.start_time || '00:00').split(':').map(Number);
+                      const [eH, eM] = (shift.end_time || '00:00').split(':').map(Number);
+                      let totalMins = (eH * 60 + eM) - (sH * 60 + sM);
+                      if (totalMins < 0) totalMins += 24 * 60;
+                      const workedMins = totalMins;
+                      const realEndMins = !breakPaid && breakMins > 0 ? eH * 60 + eM + breakMins : eH * 60 + eM;
+                      const realEndStr = `${String(Math.floor(realEndMins / 60) % 24).padStart(2, '0')}:${String(realEndMins % 60).padStart(2, '0')}`;
+                      const workedLabel = workedMins >= 60
+                        ? `${Math.floor(workedMins / 60)}h${workedMins % 60 > 0 ? ` ${workedMins % 60}m` : ''}`
+                        : `${workedMins}m`;
+
+                      const isExpanded = !!expandedShifts[shift.id];
+
+                      return (
+                        <div key={shift.id} className={`relative overflow-hidden rounded-2xl border ${s.card} transition-all duration-300`}>
+                          <div className={`absolute left-0 top-0 bottom-0 w-1 ${s.bar}`} />
+                          {/* Cabecera interactiva */}
+                          <div 
+                            onClick={() => setExpandedShifts(prev => ({ ...prev, [shift.id]: !prev[shift.id] }))}
+                            className="flex items-center gap-3 px-4 py-2.5 cursor-pointer select-none"
+                          >
+                            <div className={`size-9 shrink-0 rounded-xl flex items-center justify-center ${s.iconBg}`}>
+                              <span className={`material-symbols-outlined text-[18px] ${s.iconText}`}>schedule</span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className={`font-bold text-sm leading-tight ${s.title}`}>{startTimeStr} — {realEndStr}</p>
+                                {shift.shift_type && (
+                                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md leading-none bg-slate-100 dark:bg-white/10 ${s.iconText}`}>
+                                    {shift.shift_type}
+                                  </span>
+                                )}
+                              </div>
+                              {displayNotes && <p className={`text-xs mt-1 line-clamp-1 ${s.notes}`}>{displayNotes}</p>}
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className={`text-xs font-black ${s.iconText}`}>{workedLabel}</span>
+                              <span className={`material-symbols-outlined text-[18px] ${s.iconText} transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${isExpanded ? 'rotate-180' : ''}`}>
+                                expand_more
+                              </span>
+                            </div>
+                          </div>
+                          {/* Detalles desplegables (Animación Líquida CSS Grid) */}
+                          <div className={`grid transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${isExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                            <div className="overflow-hidden">
+                              <div className={`mx-4 border-t ${s.card.split(' ')[1]}`} />
+                              <div className="px-4 pt-3 pb-1">
+                                <h4 className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest leading-none">
+                                  Programación
+                                </h4>
+                              </div>
+                              <div className="mx-4 mb-4 grid grid-cols-3 gap-2 pt-2">
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Entrada</span>
+                                  <span className={`text-xs font-bold ${s.title}`}>{startTimeStr}</span>
+                                </div>
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                                    {!breakPaid && totalBreakMins > 0 ? 'Salida real' : 'Salida'}
+                                  </span>
+                                  <span className={`text-xs font-bold ${s.title}`}>{realEndStr}</span>
+                                </div>
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Descanso</span>
+                                  <span className={`text-xs font-bold ${s.title}`}>
+                                    {totalBreakMins > 0 ? `${totalBreakMins}m` : 'Sin descanso'}
+                                  </span>
+                                </div>
+                              </div>
+                              {totalBreakMins > 0 && (
+                                <div className="mx-4 mb-3 flex items-center gap-1.5">
+                                  <span className={`material-symbols-outlined text-[13px] ${breakPaid ? 'text-emerald-500' : 'text-slate-400 dark:text-slate-500'}`}>
+                                    {breakPaid ? 'check_circle' : 'info'}
+                                  </span>
+                                  <span className={`text-[10px] ${breakPaid ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'}`}>
+                                    Descanso {breakPaid ? 'retribuido' : 'no retribuido'}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
+              </div>
+
+              {/* Registros de Actividad */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between px-1">
+                  <h4 className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Registros de Actividad</h4>
+                  <button
+                    onClick={() => setIsEditingHistory(!isEditingHistory)}
+                    className={`text-xs font-bold transition-colors cursor-pointer border-none bg-transparent ${isEditingHistory ? 'text-primary' : 'text-slate-400 hover:text-slate-600'}`}
+                  >
+                    {isEditingHistory ? 'Terminar' : 'Editar'}
+                  </button>
+                </div>
+
+                {filteredEntries.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-10 text-slate-400 dark:text-slate-600">
+                    <span className="material-symbols-outlined text-4xl mb-2">history_toggle_off</span>
+                    <p className="text-sm font-medium">No hay actividad este día</p>
+                  </div>
+                ) : (
+                  filteredEntries.map((e, idx) => {
+                    const meta = typeMeta(e.entry_type);
+                    const c = colorClasses(meta.color);
+                    const occurred = e.occurred_at ? new Date(e.occurred_at) : new Date(e.created_at);
+                    const timeCell = occurred.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+
+                    // Duración
+                    let durationLabel = null;
+                    const type = (e.entry_type ?? "").toLowerCase();
+                    const originalIdx = historyEntries.findIndex(x => x.id === e.id);
+
+                    if (
+                      type === "clock-in" ||
+                      type === "break-start" ||
+                      type === "clock-out" ||
+                      type === "others-out" ||
+                      type === "break-end" ||
+                      type === "others-in"
+                    ) {
+                      const msCurrent = occurred.getTime();
+                      const parsedNext = originalIdx > 0 ? historyEntries[originalIdx - 1] : null;
+                      let msNext = new Date().getTime();
+
+                      if (parsedNext) {
+                        msNext = parsedNext.occurred_at
+                          ? new Date(parsedNext.occurred_at).getTime()
+                          : new Date(parsedNext.created_at).getTime();
+                      } else if (!isToday(selectedDate.getDate())) {
+                        durationLabel = null;
+                      }
+
+                      if (parsedNext || isToday(selectedDate.getDate())) {
+                        const diff = msNext - msCurrent;
+                        if (diff > 0) {
+                          durationLabel = minutesToLabel(Math.floor(diff / 1000 / 60));
+                        }
+                      }
+                    }
+
+                    const stateTitles: Record<string, string> = {
+                      "clock-in": "Trabajando",
+                      "clock-out": "Salida",
+                      "break-start": "Descanso",
+                      "break-end": "Trabajando",
+                      "others-in": "Trabajando",
+                    };
+
+                    const isStandard = Object.keys(stateTitles).includes(type);
+                    let displayLabel = isStandard ? stateTitles[type] : e.description ?? meta.label;
+                    if (type === "others-out") {
+                      const rawDesc = e.description || "";
+                      displayLabel = rawDesc.replace(/^Permiso:\s*/i, "").replace(/^Salida:\s*/i, "") || "Permiso";
+                    }
+
+                    return (
+                      <div
+                        key={e.id}
+                        className={`flex items-center gap-4 p-3 rounded-xl border-l-4 ${c.border} bg-white dark:bg-surface-dark shadow-sm group animate-fadeInUp`}
+                        style={{ animationDelay: `${idx * 0.05}s`, animationFillMode: 'both' }}
+                      >
+                        <div className={`size-10 rounded-full ${c.iconBg} flex items-center justify-center shrink-0`}>
+                          <span className={`material-symbols-outlined text-xl ${c.iconText}`}>{meta.icon}</span>
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <p className="font-bold text-slate-800 dark:text-slate-100 text-sm">{displayLabel}</p>
+                            {e.companies?.name && (
+                              <span className="text-[9px] font-bold bg-indigo-500/10 text-indigo-500 dark:text-indigo-400 dark:bg-indigo-500/20 px-1.5 py-0.5 rounded-md leading-none">
+                                {e.companies.name}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold">{timeCell} • {meta.label}</p>
+                            {e.status === 'pending' && (
+                              <span className="text-[9px] font-bold bg-amber-500/10 text-amber-500 px-1.5 py-0.5 rounded-md border border-amber-500/20 leading-none flex items-center gap-0.5">
+                                Pendiente
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {durationLabel && (
+                            <span className="text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-md transition-all">
+                              {durationLabel}
+                            </span>
+                          )}
+
+                          <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isEditingHistory ? 'w-8 opacity-100 ml-1' : 'w-0 opacity-0 ml-0'}`}>
+                            {e.id === latestGlobalId ? (
+                              <button
+                                onClick={() => handleDelete(e.id)}
+                                className="size-8 rounded-lg bg-slate-50 dark:bg-white/5 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all cursor-pointer border-none shrink-0"
+                                title="Eliminar último registro"
+                              >
+                                <span className="material-symbols-outlined text-[18px]">delete</span>
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => openEditModal(e)}
+                                className="size-8 rounded-lg bg-slate-50 dark:bg-white/5 flex items-center justify-center text-slate-400 hover:text-primary hover:bg-primary/10 transition-all cursor-pointer border-none shrink-0"
+                                title="Editar registro"
+                              >
+                                <span className="material-symbols-outlined text-[18px]">edit</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
           )}
 
           {/* Distribución del Tiempo — siempre visible */}

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { AppContext } from '../EmployeeApp';
 import { supabase } from '../services/supabase';
 
@@ -25,6 +25,7 @@ export const NotificationsProvider = ({ children }: { children: any }) => {
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [unseenDocs, setUnseenDocs] = useState(0);
   const [unseenSolicitudes, setUnseenSolicitudes] = useState(0);
+  const syncChannelRef = useRef<any>(null);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -68,6 +69,19 @@ export const NotificationsProvider = ({ children }: { children: any }) => {
     setUnseenSolicitudes(unseen);
   }, [user?.id, companyId]);
 
+  // Sincronización inicial desde la metadata de Supabase Auth
+  useEffect(() => {
+    if (!user?.id) return;
+    const metadataDocs = user.user_metadata?.seen_docs || [];
+    const metadataSols = user.user_metadata?.seen_sol_states || {};
+
+    localStorage.setItem(`fycheo_seen_docs_${user.id}`, JSON.stringify(metadataDocs));
+    localStorage.setItem(`fycheo_seen_sol_states_${user.id}`, JSON.stringify(metadataSols));
+
+    checkDocs();
+    checkSolicitudes();
+  }, [user?.id, checkDocs, checkSolicitudes]);
+
   useEffect(() => {
     if (!companyId || !user?.id) return;
     checkDocs();
@@ -80,12 +94,32 @@ export const NotificationsProvider = ({ children }: { children: any }) => {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'absences' }, checkSolicitudes)
       .subscribe();
 
+    // Canal para recibir notificaciones vistas de otros dispositivos
+    const syncChannel = supabase.channel(`sync_notifications_${user.id}`)
+      .on('broadcast', { event: 'docs_seen' }, ({ payload }) => {
+        if (payload.userId === user.id) {
+          localStorage.setItem(`fycheo_seen_docs_${user.id}`, JSON.stringify(payload.seenIds));
+          checkDocs();
+        }
+      })
+      .on('broadcast', { event: 'sols_seen' }, ({ payload }) => {
+        if (payload.userId === user.id) {
+          localStorage.setItem(`fycheo_seen_sol_states_${user.id}`, JSON.stringify(payload.seenStates));
+          checkSolicitudes();
+        }
+      })
+      .subscribe();
+
+    syncChannelRef.current = syncChannel;
+
     // Polling de fallback cada 30s por si Realtime no está habilitado
     const poll = setInterval(() => { checkDocs(); checkSolicitudes(); }, 30_000);
 
     return () => {
       supabase.removeChannel(ch1);
       supabase.removeChannel(ch2);
+      supabase.removeChannel(syncChannel);
+      syncChannelRef.current = null;
       clearInterval(poll);
     };
   }, [companyId, user?.id, checkDocs, checkSolicitudes]);
@@ -97,11 +131,26 @@ export const NotificationsProvider = ({ children }: { children: any }) => {
       .select('id')
       .eq('employee_id', user.id)
       .eq('company_id', companyId);
+    const seenIds = (data || []).map(d => d.id);
     localStorage.setItem(
       `fycheo_seen_docs_${user.id}`,
-      JSON.stringify((data || []).map(d => d.id))
+      JSON.stringify(seenIds)
     );
     setUnseenDocs(0);
+
+    // Persistir en Supabase Auth metadata
+    await supabase.auth.updateUser({
+      data: { seen_docs: seenIds }
+    });
+
+    // Difundir en tiempo real
+    if (syncChannelRef.current) {
+      syncChannelRef.current.send({
+        type: 'broadcast',
+        event: 'docs_seen',
+        payload: { userId: user.id, seenIds }
+      });
+    }
   }, [user?.id, companyId]);
 
   const markSolicitudesAsSeen = useCallback(async () => {
@@ -115,6 +164,20 @@ export const NotificationsProvider = ({ children }: { children: any }) => {
     (data || []).forEach(a => { states[a.id] = a.status; });
     localStorage.setItem(`fycheo_seen_sol_states_${user.id}`, JSON.stringify(states));
     setUnseenSolicitudes(0);
+
+    // Persistir en Supabase Auth metadata
+    await supabase.auth.updateUser({
+      data: { seen_sol_states: states }
+    });
+
+    // Difundir en tiempo real
+    if (syncChannelRef.current) {
+      syncChannelRef.current.send({
+        type: 'broadcast',
+        event: 'sols_seen',
+        payload: { userId: user.id, seenStates: states }
+      });
+    }
   }, [user?.id, companyId]);
 
   return (

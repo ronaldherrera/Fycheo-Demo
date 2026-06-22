@@ -11,6 +11,7 @@ import { employeeService } from '../services/employeeService';
 import { shiftService } from '../services/shiftService';
 import { absenceService } from '../services/absenceService';
 import { useAuth } from '../contexts/AuthContext';
+import { logService } from '../services/logService';
 import { settingsService } from '../services/settingsService';
 import { documentService } from '../services/documentService';
 import type { EmployeeDocument } from '../services/documentService';
@@ -133,7 +134,7 @@ const getAbsenceTypeName = (type: string, policies?: Record<string, any>): strin
 const EmployeeDetail = () => {
   const { employeeId } = useParams<{ employeeId: string }>();
   const navigate = useNavigate();
-  const { activeCompany } = useAuth();
+  const { user, activeCompany, profile } = useAuth();
   const isAdminOrHr = activeCompany?.role === 'admin' || activeCompany?.role === 'hr';
 
   const [employee, setEmployee] = useState<Employee | null>(null);
@@ -451,7 +452,7 @@ const EmployeeDetail = () => {
 
   const handleCreateEntry = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!employeeId || savingAction) return;
+    if (!employeeId || !activeCompany?.id || savingAction) return;
 
     setSavingAction(true);
     try {
@@ -467,6 +468,7 @@ const EmployeeDetail = () => {
         : 'Entrada trabajo';
 
       const payload = {
+        company_id: activeCompany.id,
         user_id: employeeId,
         entry_type: modalEntryType,
         description: modalDescription.trim() || defaultLabel,
@@ -477,6 +479,17 @@ const EmployeeDetail = () => {
       };
 
       await employeeService.createTimeEntry(payload);
+      if (profile && activeCompany && employee) {
+        const empName = employee.full_name || employee.name || 'Empleado';
+        const typeLabel = modalEntryType === 'clock-in' ? 'Entrada' : modalEntryType === 'clock-out' ? 'Salida' : 'Descanso';
+        await logService.logAction(
+          activeCompany.id,
+          profile.id,
+          'manual_clock_in_out',
+          `Registró un fichaje manual de ${typeLabel} a las ${modalTime} en nombre de ${empName}`,
+          { employee_id: employee.id, employee_name: empName, entry_type: modalEntryType, time: modalTime, date: dateStr, notes: modalDescription.trim() }
+        );
+      }
       setIsAddModalOpen(false);
       await loadScheduleAndEntries();
     } catch (err) {
@@ -515,6 +528,16 @@ const EmployeeDetail = () => {
       };
 
       await employeeService.updateTimeEntry(selectedEntry.id, updates);
+      if (profile && activeCompany && employee) {
+        const empName = employee.full_name || employee.name || 'Empleado';
+        await logService.logAction(
+          activeCompany.id,
+          profile.id,
+          'time_entry_edited',
+          `Modificó el fichaje de las ${selectedEntry.entry_time} (ahora a las ${modalTime}) en nombre de ${empName}`,
+          { employee_id: employee.id, employee_name: empName, old_entry: selectedEntry, new_entry: updates, notes: modalDescription.trim() }
+        );
+      }
       setIsEditModalOpen(false);
       await loadScheduleAndEntries();
     } catch (err) {
@@ -536,6 +559,16 @@ const EmployeeDetail = () => {
     setSavingAction(true);
     try {
       await employeeService.deleteTimeEntry(selectedEntry.id);
+      if (profile && activeCompany && employee) {
+        const empName = employee.full_name || employee.name || 'Empleado';
+        await logService.logAction(
+          activeCompany.id,
+          profile.id,
+          'time_entry_deleted',
+          `Eliminó el fichaje de las ${selectedEntry.entry_time} (${selectedEntry.entry_type}) en nombre de ${empName}`,
+          { employee_id: employee.id, employee_name: empName, deleted_entry: selectedEntry }
+        );
+      }
       setIsDeleteModalOpen(false);
       await loadScheduleAndEntries();
     } catch (err) {
@@ -631,13 +664,14 @@ const EmployeeDetail = () => {
   // --- Cálculos de Estado y KPIs ---
   
   const handleForceClockOut = async () => {
-    if (!employeeId || savingAction) return;
+    if (!employeeId || !activeCompany?.id || savingAction) return;
     setSavingAction(true);
     try {
       const now = new Date();
       const dateStr = formatDateString(now);
       const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
       const payload = {
+        company_id: activeCompany.id,
         user_id: employeeId,
         entry_type: 'clock-out',
         description: 'Forzado por administrador',
@@ -647,6 +681,16 @@ const EmployeeDetail = () => {
         minutes: 0
       };
       await employeeService.createTimeEntry(payload);
+      if (profile && activeCompany && employee) {
+        const empName = employee.full_name || employee.name || 'Empleado';
+        await logService.logAction(
+          activeCompany.id,
+          profile.id,
+          'force_clock_out',
+          `Forzó la salida del empleado ${empName}`,
+          { employee_id: employee.id, employee_name: empName, date: dateStr, time: timeStr }
+        );
+      }
       await loadScheduleAndEntries();
     } catch (err) {
       console.error(err);
@@ -2144,6 +2188,18 @@ const EmployeeDetail = () => {
                           if (window.confirm("¿Estás seguro de eliminar este documento?")) {
                              try {
                                await documentService.deleteDocument(doc.id, doc.file_url);
+                               if (profile && activeCompany && employee) {
+                                 const empName = employee.full_name || employee.name || 'Empleado';
+                                 const actionType = doc.document_type === 'nomina' ? 'payroll_deleted' : doc.document_type === 'contrato' ? 'contract_deleted' : 'document_deleted';
+                                 const actionText = doc.document_type === 'nomina' ? `Eliminó la nómina de ${doc.period || ''} de ${empName}` : doc.document_type === 'contrato' ? `Eliminó el contrato de ${empName}` : `Eliminó un documento ("${doc.title}") de ${empName}`;
+                                 await logService.logAction(
+                                   activeCompany.id,
+                                   profile.id,
+                                   actionType,
+                                   actionText,
+                                   { employee_id: employee.id, employee_name: empName, document_title: doc.title }
+                                 );
+                               }
                                await loadDocuments();
                              } catch (e) {
                                console.error(e);
@@ -2834,6 +2890,18 @@ const EmployeeDetail = () => {
                         finalTitle, 
                         uploadDocType === 'nomina' ? uploadDocPeriod : undefined
                       );
+                      if (profile && employee) {
+                        const empName = employee.full_name || employee.name || 'Empleado';
+                        const actionType = uploadDocType === 'nomina' ? 'payroll_added' : uploadDocType === 'contrato' ? 'contract_added' : 'document_added';
+                        const actionText = uploadDocType === 'nomina' ? `Subió la nómina de ${uploadDocPeriod} para ${empName}` : uploadDocType === 'contrato' ? `Subió el contrato para ${empName}` : `Subió un documento ("${finalTitle}") para ${empName}`;
+                        await logService.logAction(
+                          activeCompany.id,
+                          profile.id,
+                          actionType,
+                          actionText,
+                          { employee_id: employee.id, employee_name: empName, document_title: finalTitle }
+                        );
+                      }
                       await loadDocuments();
                       setIsUploadDocModalOpen(false);
                     } catch (error) {

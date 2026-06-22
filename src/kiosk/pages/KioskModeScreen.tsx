@@ -1170,7 +1170,7 @@ export default function KioskModeScreen() {
 
           <div>
             <div className="flex items-center gap-3 mb-6">
-              <img src="/icono-kiosko.svg" alt="Fycheo" className="w-9 h-9 rounded-xl shadow-lg shadow-primary/20" />
+              <img src="https://fycheo.es/brand/icono.svg" alt="Fycheo" className="w-9 h-9 rounded-xl shadow-lg shadow-primary/20" />
               <span className="text-base font-bold tracking-tight text-white">Fycheo Kiosko</span>
             </div>
 

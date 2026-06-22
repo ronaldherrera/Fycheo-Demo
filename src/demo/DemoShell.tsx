@@ -463,7 +463,7 @@ export default function DemoShell() {
       <aside className="w-72 shrink-0 flex flex-col border-r border-white/5 bg-[#0C1020]">
 
         <div className="h-16 flex items-center gap-2 px-5 border-b border-white/5">
-          <img src="https://www.fycheo.es/brand/logotipo_bg-dark.svg" alt="Fycheo" className="h-7 object-contain" />
+          <img src="https://fycheo.es/brand/logotipo_bg-dark.svg" alt="Fycheo" className="h-7 object-contain" />
           <span className="text-[10px] font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full ml-1 shrink-0">DEMO</span>
         </div>
 

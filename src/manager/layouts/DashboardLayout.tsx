@@ -3,7 +3,6 @@ import { Outlet, Link } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import { cn } from '../lib/utils';
 import { Menu } from 'lucide-react';
-import logo from '../assets/logo.svg'; 
 
 const DashboardLayout = () => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -18,7 +17,7 @@ const DashboardLayout = () => {
       {/* Mobile Header */}
       <div className="md:hidden fixed top-0 w-full z-40 bg-surface-dark border-b border-white/5 px-4 h-16 flex items-center justify-between">
             <Link to="/manager" className="flex items-center gap-2">
-                <img src={logo} alt="Fycheo" className="h-8 object-contain" />
+                <img src="https://fycheo.es/brand/logotipo_mngr_bg-dark.svg" alt="Fycheo" className="h-8 object-contain" />
             </Link>
             <button onClick={() => setIsMobileOpen(true)} className="text-white p-2">
                 <Menu />

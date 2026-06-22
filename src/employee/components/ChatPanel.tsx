@@ -8,6 +8,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback, useContext } from 'react';
+import { Clock, Check, CheckCheck } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { deAdjustISOString, adjustDataToCurrentDate } from '../../lib/date-adjuster';
 import { AppContext } from '../EmployeeApp';
@@ -32,6 +33,7 @@ interface ChatMessage {
   receiver_id: string;
   content: string;
   sent_at: string;
+  delivered_at: string | null;
   read_at: string | null;
   expires_at: string;
 }
@@ -77,6 +79,71 @@ const formatTime = (iso: string) => {
   }
   return d.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' });
 };
+
+const formatMsgTime = (iso: string) => {
+  const d = new Date(iso);
+  return d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+};
+
+const formatSeparatorDate = (iso: string) => {
+  const d = new Date(iso);
+  const now = new Date();
+  const dDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const nowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diffTime = nowDate.getTime() - dDate.getTime();
+  const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) return 'Hoy';
+  if (diffDays === 1) return 'Ayer';
+  if (d.getFullYear() === now.getFullYear()) {
+    return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'long' });
+  }
+  return d.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+};
+
+const getPriorityAvatar = (avatar: string | null | undefined, avatarUrl: string | null | undefined): string | null => {
+  const isInvalid = (url: string | null | undefined): boolean => {
+    if (!url) return true;
+    const u = url.toLowerCase().trim();
+    return (
+      u === '' || 
+      u.includes('default') || 
+      u.includes('placeholder') || 
+      u.includes('avatar-placeholder') ||
+      u.includes('avatar_placeholder')
+    );
+  };
+  if (!isInvalid(avatarUrl)) return avatarUrl!;
+  if (!isInvalid(avatar)) return avatar!;
+  return null;
+};
+
+// ─── Avatar (compartido entre ChatPanel y CoworkerCard) ─────────────────────
+
+const Avatar = ({ avatar, avatarUrl, src: propSrc, name, size = 36, offline = false }: { avatar?: string | null; avatarUrl?: string | null; src?: string | null; name: string | null; size?: number; offline?: boolean }) => {
+  const initial = (name ?? '?')[0].toUpperCase();
+  const hue = 240 + ((name?.charCodeAt(0) ?? 0) % 40);
+  const src = propSrc || getPriorityAvatar(avatar, avatarUrl);
+  if (src) return (
+    <img src={src} alt={name ?? ''} style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, opacity: offline ? 0.6 : 1 }}
+      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+  );
+  
+  const bg = offline
+    ? `linear-gradient(135deg, hsl(${hue},30%,20%), hsl(${hue},25%,16%))`
+    : `linear-gradient(135deg, hsl(${hue},65%,55%), hsl(${hue + 25},75%,40%))`;
+  const color = offline ? '#334155' : '#fff';
+
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: '50%', flexShrink: 0,
+      background: bg,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: Math.round(size * 0.38), fontWeight: 800, color: color, letterSpacing: '-0.01em',
+    }}>{initial}</div>
+  );
+};
+
 
 // ─── Componente ───────────────────────────────────────────────────────────────
 
@@ -223,6 +290,20 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ companyId, onUnreadChange, onClos
     }
   }, [user?.id, onUnreadChange]);
 
+  // ── Estado de mensaje al estilo WhatsApp ─────────────────────────────────
+  const renderMessageStatus = (msg: ChatMessage) => {
+    if (msg.id.startsWith('temp-')) {
+      return <Clock size={11} className="text-slate-500 inline-block align-middle" />;
+    }
+    if (msg.read_at) {
+      return <CheckCheck size={11} className="text-sky-400 inline-block align-middle" />;
+    }
+    if (msg.delivered_at) {
+      return <CheckCheck size={11} className="text-slate-400 inline-block align-middle" />;
+    }
+    return <Check size={11} className="text-slate-400 inline-block align-middle" />;
+  };
+
   // ── Enviar mensaje ─────────────────────────────────────────────────────────
   const sendMessage = async () => {
     if (!activeChat || !messageInput.trim() || !user?.id || sending) return;
@@ -231,6 +312,21 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ companyId, onUnreadChange, onClos
 
     setSending(true);
     setMessageInput('');
+
+    // Mensaje temporal → muestra reloj mientras se envía
+    const tempId = `temp-${Math.random().toString(36).substring(2, 9)}`;
+    const tempMsg: ChatMessage = {
+      id: tempId,
+      sender_id: user.id,
+      receiver_id: activeChat.user_id,
+      content,
+      sent_at: new Date().toISOString(),
+      delivered_at: null,
+      read_at: null,
+      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+    };
+    setMessages(prev => [...prev, tempMsg]);
+
     try {
       const { data, error } = await supabase
         .from('ephemeral_messages')
@@ -245,11 +341,13 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ companyId, onUnreadChange, onClos
 
       if (error) throw error;
       if (data) {
-        setMessages(prev => [...prev, data]);
+        // Reemplaza el temporal por el mensaje real → reloj pasa a check
+        setMessages(prev => prev.map(m => m.id === tempId ? data : m));
       }
     } catch (e) {
       console.error('Error enviando mensaje:', e);
-      setMessageInput(content); // Restaurar si falla
+      setMessages(prev => prev.filter(m => m.id !== tempId));
+      setMessageInput(content);
     } finally {
       setSending(false);
     }
@@ -277,20 +375,22 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ companyId, onUnreadChange, onClos
         async (payload) => {
           const newMsg = payload.new as ChatMessage;
 
-          // Si estoy en la conversación con el remitente → mostrar y borrar
           setActiveChat(current => {
             if (current?.user_id === newMsg.sender_id) {
               setMessages(prev => [...prev, newMsg]);
-              // Borrar inmediatamente (ya que lo estoy leyendo)
+              // Marca como leído (el sender verá el doble check azul) y luego borra localmente
               supabase
                 .from('ephemeral_messages')
-                .delete()
+                .update({ read_at: new Date().toISOString() })
                 .eq('id', newMsg.id)
                 .then(() => {
                   setMessages(prev => prev.filter(m => m.id !== newMsg.id));
                 });
             } else {
-              // Incrementar badge del remitente y notificar total al padre
+              supabase
+                .from('ephemeral_messages')
+                .update({ delivered_at: new Date().toISOString() })
+                .eq('id', newMsg.id);
               setCoworkers(prev => {
                 const updated = prev.map(c =>
                   c.user_id === newMsg.sender_id
@@ -304,6 +404,22 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ companyId, onUnreadChange, onClos
             }
             return current;
           });
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'ephemeral_messages',
+          filter: `sender_id=eq.${user.id}`,
+        },
+        (payload) => {
+          // El destinatario ha leído el mensaje → mostrar doble check azul
+          const updatedMsg = payload.new as ChatMessage;
+          setMessages(prev =>
+            prev.map(m => m.id === updatedMsg.id ? { ...m, delivered_at: updatedMsg.delivered_at, read_at: updatedMsg.read_at } : m)
+          );
         }
       )
       .subscribe();
@@ -369,24 +485,6 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ companyId, onUnreadChange, onClos
     loadCoworkers(); // Refrescar badges
   };
 
-  // ── Avatar ────────────────────────────────────────────────────────────────
-  const Avatar = ({ src, name, size = 36 }: { src: string | null; name: string | null; size?: number }) => {
-    const initial = (name ?? '?')[0].toUpperCase();
-    const hue = 240 + ((name?.charCodeAt(0) ?? 0) % 40);
-    if (src) return (
-      <img src={src} alt={name ?? ''} style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
-        onError={(e) => { (e.target as HTMLImageElement).src = DEFAULT_AVATAR; }} />
-    );
-    return (
-      <div style={{
-        width: size, height: size, borderRadius: '50%', flexShrink: 0,
-        background: `linear-gradient(135deg, hsl(${hue},65%,55%), hsl(${hue + 25},75%,40%))`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: Math.round(size * 0.38), fontWeight: 800, color: '#fff', letterSpacing: '-0.01em',
-      }}>{initial}</div>
-    );
-  };
-
   // ── Agrupar mensajes consecutivos del mismo sender ─────────────────────────
   const groupMessages = (msgs: ChatMessage[]) => {
     const groups: { senderId: string; msgs: ChatMessage[] }[] = [];
@@ -398,10 +496,46 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ companyId, onUnreadChange, onClos
     return groups;
   };
 
+  // ── Agrupar mensajes por día y por emisor consecutivo ───────────────────────
+  interface DateGroup {
+    dateStr: string;
+    sentAt: string;
+    groups: {
+      senderId: string;
+      msgs: ChatMessage[];
+    }[];
+  }
+
+  const groupMessagesByDayAndSender = (msgs: ChatMessage[]) => {
+    const dayGroups: DateGroup[] = [];
+    for (const msg of msgs) {
+      const dateStr = new Date(msg.sent_at).toDateString();
+      let dayGroup = dayGroups.find(dg => dg.dateStr === dateStr);
+      if (!dayGroup) {
+        dayGroup = {
+          dateStr,
+          sentAt: msg.sent_at,
+          groups: []
+        };
+        dayGroups.push(dayGroup);
+      }
+      const lastSenderGroup = dayGroup.groups[dayGroup.groups.length - 1];
+      if (lastSenderGroup && lastSenderGroup.senderId === msg.sender_id) {
+        lastSenderGroup.msgs.push(msg);
+      } else {
+        dayGroup.groups.push({
+          senderId: msg.sender_id,
+          msgs: [msg]
+        });
+      }
+    }
+    return dayGroups;
+  };
+
   // ─── RENDER: Conversación ──────────────────────────────────────────────────
   if (activeChat) {
     const pm = presenceMeta(activeChat.presence);
-    const groups = groupMessages(messages);
+    const dayGroups = groupMessagesByDayAndSender(messages);
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#060e1c' }}>
@@ -472,61 +606,106 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ companyId, onUnreadChange, onClos
               </div>
             </div>
           ) : (
-            groups.map((group, gi) => {
-              const isMine = group.senderId === user?.id;
+            dayGroups.map((dayGroup) => {
               return (
-                <div key={gi} style={{
-                  display: 'flex', flexDirection: 'column',
-                  alignItems: isMine ? 'flex-end' : 'flex-start',
-                  gap: 2, marginBottom: 8,
-                }}>
-                  {group.msgs.map((msg, mi) => {
-                    const isFirst = mi === 0;
-                    const isLast  = mi === group.msgs.length - 1;
-                    const rr = (tl: number, tr: number, br: number, bl: number) =>
-                      `${tl}px ${tr}px ${br}px ${bl}px`;
-                    const radius = isMine
-                      ? rr(isFirst ? 18 : 6, 18, isLast ? 5 : 18, 18)
-                      : rr(18, isFirst ? 18 : 6, 18, isLast ? 5 : 18);
+                <div key={dayGroup.dateStr} style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+                  {/* Separador de fecha Sticky */}
+                  <div style={{
+                    position: 'sticky',
+                    top: 0,
+                    zIndex: 10,
+                    display: 'flex',
+                    justifyContent: 'center',
+                    margin: '6px 0 12px',
+                    padding: '4px 0',
+                    width: '100%',
+                    pointerEvents: 'none',
+                  }}>
+                    <span style={{
+                      background: 'rgba(15,23,42,0.92)',
+                      color: '#94a3b8',
+                      fontSize: 11,
+                      fontWeight: 600,
+                      padding: '4px 10px',
+                      borderRadius: 8,
+                      backdropFilter: 'blur(8px)',
+                      border: '1px solid rgba(255,255,255,0.06)',
+                      boxShadow: '0 2px 6px rgba(0,0,0,0.35)',
+                      pointerEvents: 'auto',
+                    }}>
+                      {formatSeparatorDate(dayGroup.sentAt)}
+                    </span>
+                  </div>
 
+                  {/* Mensajes de este día */}
+                  {dayGroup.groups.map((group, gi) => {
+                    const isMine = group.senderId === user?.id;
                     return (
-                      <div key={msg.id} style={{
-                        display: 'flex', alignItems: 'flex-end', gap: 7,
-                        flexDirection: isMine ? 'row-reverse' : 'row',
-                        animation: 'cpSlide 0.18s ease',
+                      <div key={gi} style={{
+                        display: 'flex', flexDirection: 'column',
+                        width: '100%',
+                        alignItems: isMine ? 'flex-end' : 'flex-start',
+                        gap: 2, marginBottom: 8,
                       }}>
-                        {/* Avatar: solo para el ultimo de su grupo */}
-                        <div style={{ width: 28, flexShrink: 0, alignSelf: 'flex-end' }}>
-                          {!isMine && isLast && (
-                            <Avatar src={activeChat.avatar_url} name={activeChat.full_name} size={26} />
-                          )}
-                        </div>
+                        {group.msgs.map((msg, mi) => {
+                          const isFirst = mi === 0;
+                          const isLast  = mi === group.msgs.length - 1;
+                          const rr = (tl: number, tr: number, br: number, bl: number) =>
+                            `${tl}px ${tr}px ${br}px ${bl}px`;
+                          const radius = isMine
+                            ? rr(isFirst ? 18 : 6, 18, isLast ? 5 : 18, 18)
+                            : rr(18, isFirst ? 18 : 6, 18, isLast ? 5 : 18);
 
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: isMine ? 'flex-end' : 'flex-start', maxWidth: '72%' }}>
-                          <div style={{
-                            padding: '9px 13px',
-                            borderRadius: radius,
-                            background: isMine
-                              ? '#6366f1'
-                              : 'rgba(18,28,50,0.95)',
-                            border: isMine ? 'none' : '1px solid rgba(99,102,241,0.1)',
-                            color: '#f1f5f9', fontSize: 13.5, lineHeight: 1.5, wordBreak: 'break-word',
-                          }}>
-                            {msg.content}
-                          </div>
-                          {isLast && (
-                            <div style={{
-                              display: 'flex', alignItems: 'center', gap: 3,
-                              marginTop: 3, paddingLeft: isMine ? 0 : 4, paddingRight: isMine ? 4 : 0,
-                              fontSize: 10, color: '#1e3a5f',
+                          return (
+                            <div key={msg.id} style={{
+                              display: 'flex', alignItems: 'flex-end', gap: 7,
+                              width: '100%',
+                              flexDirection: isMine ? 'row-reverse' : 'row',
+                              animation: 'cpSlide 0.18s ease',
+                              marginBottom: 2,
                             }}>
-                              {isMine && (
-                                <span className="material-symbols-outlined" style={{ fontSize: 11, color: '#4338ca' }}>done</span>
+                              {/* Avatar / Spacer */}
+                              {!isMine && isLast && (
+                                <div style={{ flexShrink: 0, marginBottom: 2 }}>
+                                  <Avatar src={activeChat.avatar_url} name={activeChat.full_name} size={26} />
+                                </div>
                               )}
-                              {formatTime(msg.sent_at)}
+                              {!isMine && !isLast && (
+                                <div style={{ width: 26, flexShrink: 0 }} />
+                              )}
+
+                              <div style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                maxWidth: '72%',
+                                width: 'fit-content',
+                              }}>
+                                <div style={{
+                                  padding: '9px 13px',
+                                  borderRadius: radius,
+                                  background: isMine
+                                    ? '#6366f1'
+                                    : 'rgba(18,28,50,0.95)',
+                                  border: isMine ? 'none' : '1px solid rgba(99,102,241,0.1)',
+                                  color: '#f1f5f9', fontSize: 14.5, fontWeight: 500, fontFamily: '"Manrope", sans-serif', lineHeight: 1.5, wordBreak: 'break-word',
+                                }}>
+                                  {msg.content}
+                                </div>
+                                {isLast && (
+                                  <span style={{
+                                    fontSize: 9, color: '#64748b', marginTop: 3,
+                                    display: 'flex', alignItems: 'center', gap: 4,
+                                    justifyContent: isMine ? 'flex-end' : 'flex-start',
+                                    paddingLeft: isMine ? 0 : 4, paddingRight: isMine ? 4 : 0,
+                                  }}>
+                                    {isMine && renderMessageStatus(msg)}
+                                    <span>{formatMsgTime(msg.sent_at)}</span>
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                          )}
-                        </div>
+                          );
+                        })}
                       </div>
                     );
                   })}

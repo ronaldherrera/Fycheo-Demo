@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../services/supabase';
-import logo from '../assets/logo.png';
+
 import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Lock, Mail, ArrowLeft, CheckCircle2 } from 'lucide-react';
 
@@ -119,7 +119,7 @@ export default function Login() {
 
         <div className="relative z-10">
             <div className="flex flex-col items-center mb-8">
-                <img src={logo} alt="Fycheo" className="h-16 object-contain mb-4" onError={(e) => e.currentTarget.style.display='none'} />
+                <img src="https://fycheo.es/brand/logotipo_mngr_bg-dark.svg" alt="Fycheo" className="h-16 object-contain mb-4" />
                 <h1 className="text-2xl font-bold text-white tracking-tight">Fycheo Manager</h1>
                 <p className="text-slate-400 text-sm mt-2">
                   {isForgotPassword ? 'Recuperar contraseña' : 'Gestión de Organización'}

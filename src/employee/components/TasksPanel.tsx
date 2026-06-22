@@ -8,7 +8,7 @@
  * - Badge: notifica número de pendientes al padre
  */
 
-import React, { useState, useEffect, useCallback, useContext } from 'react';
+import React, { useState, useEffect, useCallback, useContext, useRef } from 'react';
 import { supabase } from '../services/supabase';
 import { AppContext } from '../EmployeeApp';
 
@@ -36,7 +36,7 @@ interface Task {
 }
 
 interface TasksPanelProps {
-  onPendingChange?: (count: number) => void;
+  onPendingChange?: (total: number, notices: number) => void;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -87,9 +87,10 @@ const TasksPanel: React.FC<TasksPanelProps> = ({ onPendingChange }) => {
         .eq('status', 'pending')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      const total = data?.length ?? 0;
+      const notices = data?.filter(t => t.type === 'notice').length ?? 0;
       setTasks(data ?? []);
-      onPendingChange?.(data?.length ?? 0);
+      onPendingChange?.(total, notices);
     } catch (e) {
       console.error('Error cargando tareas:', e);
     } finally {
@@ -97,10 +98,17 @@ const TasksPanel: React.FC<TasksPanelProps> = ({ onPendingChange }) => {
     }
   }, [user?.id, onPendingChange]);
 
+  const lastCounts = useRef({ total: -1, notices: -1 });
+
   // ── Sincronizar badge con el padre ────────────────────────────────────────
   useEffect(() => {
-    onPendingChange?.(tasks.length);
-  }, [tasks.length]);
+    const total = tasks.length;
+    const notices = tasks.filter(t => t.type === 'notice').length;
+    if (lastCounts.current.total !== total || lastCounts.current.notices !== notices) {
+      lastCounts.current = { total, notices };
+      onPendingChange?.(total, notices);
+    }
+  }, [tasks, onPendingChange]);
 
   // ── Marcar como hecho ─────────────────────────────────────────────────────
   const markDone = async (taskId: string) => {

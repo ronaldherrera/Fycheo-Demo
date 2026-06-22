@@ -7,7 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { shiftService } from '../services/shiftService';
 import { notificationService } from '../services/notificationService';
 import { logService } from '../services/logService';
-import logo from '../assets/logo.svg';
+
 
 interface SidebarProps {
     isOpen?: boolean;
@@ -99,6 +99,13 @@ const Sidebar = ({ isOpen = true, setIsOpen, isMobile = false }: SidebarProps) =
       
       await shiftService.publishShifts(shiftIds, deletedShiftIds, managerName);
       
+      // Publicar todos los logs provisionales de la empresa
+      await supabase
+        .from('activity_logs')
+        .update({ is_published: true })
+        .eq('company_id', activeCompany.id)
+        .eq('is_published', false);
+      
       // Notificar a Shifts.tsx si está abierto
       window.dispatchEvent(new CustomEvent('fycheo-publish-done'));
       
@@ -178,7 +185,7 @@ const Sidebar = ({ isOpen = true, setIsOpen, isMobile = false }: SidebarProps) =
         )}>
              <Link to="/manager" className="flex items-center shrink-0 relative">
                   <img 
-                      src="https://www.fycheo.es/brand/logotipo_mngr_bg-dark.svg" 
+                      src="https://fycheo.es/brand/logotipo_mngr_bg-dark.svg" 
                       alt="Fycheo" 
                       className={cn(
                           "h-8 object-contain transition-all duration-300 ease-in-out origin-left",
@@ -186,7 +193,7 @@ const Sidebar = ({ isOpen = true, setIsOpen, isMobile = false }: SidebarProps) =
                       )} 
                   />
                   <img 
-                      src="https://www.fycheo.es/brand/favicon.png" 
+                      src="https://fycheo.es/brand/favicon.png" 
                       alt="Fycheo" 
                       className={cn(
                           "h-8 w-8 object-contain transition-all duration-300 ease-in-out origin-center absolute left-1/2 -translate-x-1/2",

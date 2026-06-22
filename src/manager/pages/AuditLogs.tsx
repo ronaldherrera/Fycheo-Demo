@@ -84,6 +84,10 @@ export default function AuditLogs() {
       'holiday_deleted': 'Festivo Eliminado',
       'document_added': 'Documento Subido',
       'document_deleted': 'Documento Eliminado',
+      'payroll_added': 'Nómina Subida',
+      'payroll_deleted': 'Nómina Eliminada',
+      'contract_added': 'Contrato Subido',
+      'contract_deleted': 'Contrato Eliminado',
       'leave_approved': 'Permiso Aprobado',
       'leave_rejected': 'Permiso Denegado',
       'leave_status_reverted': 'Permiso Revertido',
@@ -157,6 +161,12 @@ export default function AuditLogs() {
             {filteredLogs.map((log) => {
               const date = new Date(log.created_at);
               const colorClasses = getActionColor(log.action_type);
+              const isTimeLog = [
+                'manual_clock_in_out',
+                'time_entry_edited',
+                'time_entry_deleted',
+                'force_clock_out'
+              ].includes(log.action_type);
               
               return (
                 <div key={log.id} className="flex flex-col sm:flex-row gap-4 p-4 rounded-2xl bg-black/40 border border-white/5 hover:border-white/10 transition-colors">
@@ -192,6 +202,64 @@ export default function AuditLogs() {
                           {log.description}
                         </p>
                       </div>
+                      {/* Time entry detail block */}
+                      {isTimeLog && (
+                        <div className="mt-3 p-3.5 bg-black/40 border border-white/5 rounded-xl text-xs max-w-xl">
+                          <div className="grid grid-cols-[140px_1fr] gap-x-4 gap-y-2">
+                            <span className="text-slate-500 font-medium">Tipo de Fichaje</span>
+                            <span className="font-semibold text-slate-200">
+                              {(() => {
+                                const type = log.metadata?.entry_type 
+                                  || log.metadata?.new_entry?.entry_type 
+                                  || log.metadata?.deleted_entry?.entry_type 
+                                  || (log.action_type === 'force_clock_out' ? 'clock-out' : '');
+                                if (type === 'clock-in') return 'Entrada Trabajo (Clock-in)';
+                                if (type === 'clock-out') return 'Salida Trabajo (Clock-out)';
+                                if (type === 'break-start') return 'Inicio Descanso (Break-start)';
+                                if (type === 'break-end') return 'Fin Descanso (Break-end)';
+                                if (type === 'others-out') return 'Salida Permiso/Otros';
+                                if (type === 'others-in') return 'Retorno Permiso/Otros';
+                                return type || 'N/A';
+                              })()}
+                            </span>
+
+                            <span className="text-slate-500 font-medium">Hora registrada</span>
+                            <span className="font-semibold text-slate-200">
+                              {(() => {
+                                if (log.action_type === 'time_entry_edited') {
+                                  const oldTime = log.metadata?.old_entry?.entry_time;
+                                  const newTime = log.metadata?.new_entry?.entry_time;
+                                  return (
+                                    <span>
+                                      <span className="line-through text-red-400">{oldTime || 'N/A'}</span>
+                                      <span className="text-slate-500 mx-2">→</span>
+                                      <span className="text-emerald-400 font-semibold">{newTime || 'N/A'}</span>
+                                    </span>
+                                  );
+                                }
+                                const time = log.metadata?.time || log.metadata?.deleted_entry?.entry_time || '';
+                                const date = log.metadata?.date || '';
+                                return `${date ? date + ' a las ' : ''}${time || 'N/A'}`;
+                              })()}
+                            </span>
+
+                            {/* Mostrar notas si existen */}
+                            {(() => {
+                              const notes = log.metadata?.notes 
+                                || log.metadata?.new_entry?.description 
+                                || log.metadata?.deleted_entry?.description 
+                                || (log.action_type === 'force_clock_out' ? 'Forzado por administrador' : '');
+                              if (!notes) return null;
+                              return (
+                                <>
+                                  <span className="text-slate-500 font-medium">Notas / Descripción</span>
+                                  <span className="text-slate-300 italic">"{notes}"</span>
+                                </>
+                              );
+                            })()}
+                          </div>
+                        </div>
+                      )}
                     </div>
                     
                     <div className="flex items-center gap-2 mt-2">
