@@ -55,7 +55,7 @@ No es un paso para quien ejecuta la demo; se documenta para entender el modelo.
 
 - **Crear o recrear la empresa demo:** `select public.demo_seed('<contraseña>');` crea la empresa con `is_demo = true`, las cuentas demo (la contraseña indicada es la que va en `VITE_DEMO_ADMIN_PASSWORD`), 24 empleados en 4 equipos y 12 meses de turnos, fichajes, ausencias y registros de actividad.
 - **Reinicio:** `select public.demo_reset();` devuelve la empresa a su estado inicial. Está programado cada noche y puede lanzarse a mano.
-- **Lista de invitados y estadísticas de visitas:** se gestionan desde el panel interno de Fycheo (maestro). Esta demo solo escribe en `demo_visits` y `demo_events`; no puede leer ninguna de las dos tablas.
+- **Lista de invitados y estadísticas de visitas:** se gestionan desde el panel interno de Fycheo (maestro). Esta demo solo escribe a través de las funciones `demo_track_visit`, `demo_heartbeat` y `demo_track_event` (ver `src/lib/demoTracking.ts`); no puede leer ninguna tabla de seguimiento.
 
 ## Qué no hace la demo
 

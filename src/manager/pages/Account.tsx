@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { User, Shield, CreditCard, Building2, Check } from 'lucide-react';
 import { planFamily, planLabel } from '../lib/plans';
+import { track } from '../../lib/demoTracking';
 
 const plans = [
     {
@@ -45,6 +46,10 @@ const Account = () => {
     const currentFamily = planFamily(currentPlan);
 
     const handlePlanChange = (planId: string) => {
+        // Seguimiento de la demo: intento de contratar un plan (importe en €/mes si lo tiene)
+        const amount = parseInt(plans.find(p => p.id === planId)?.price ?? '', 10);
+        track('topup_attempt', Number.isNaN(amount) ? { plan: planId } : { plan: planId, amount });
+
         // Aquí iría la lógica real de cambio de plan (Stripe, etc.)
         alert(`Has seleccionado contratar el plan: ${planId}`);
         setCurrentPlan(planId);

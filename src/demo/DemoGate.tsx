@@ -1,23 +1,9 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { startVisit } from '../lib/demoTracking';
 import { Mail, ArrowRight, Loader2, ShieldCheck, Lock } from 'lucide-react';
 
 const STORAGE_KEY = 'fycheo_demo_access';
-
-function detectDevice(): string {
-  const ua = navigator.userAgent;
-  if (/iPad|Android(?!.*Mobile)|Tablet/i.test(ua)) return 'tablet';
-  if (/Mobi|Android|iPhone/i.test(ua)) return 'mobile';
-  return 'desktop';
-}
-
-async function trackVisit(email: string) {
-  await supabase.from('demo_visits').insert({
-    email,
-    device_type: detectDevice(),
-    user_agent:  navigator.userAgent.slice(0, 250),
-  });
-}
 
 /**
  * Comprueba si un email está invitado a la demo.
@@ -49,7 +35,7 @@ export default function DemoGate({ children }: Props) {
     checkAccess(saved)
       .then(ok => {
         if (ok) {
-          trackVisit(saved);
+          void startVisit(saved);
           setStatus('granted');
         } else {
           localStorage.removeItem(STORAGE_KEY);
@@ -72,7 +58,7 @@ export default function DemoGate({ children }: Props) {
       const ok = await checkAccess(cleanEmail);
       if (ok) {
         localStorage.setItem(STORAGE_KEY, cleanEmail);
-        trackVisit(cleanEmail);
+        void startVisit(cleanEmail);
         setStatus('granted');
       } else {
         setError('Este email no tiene acceso a la demo. Contacta con el equipo de Fycheo.');

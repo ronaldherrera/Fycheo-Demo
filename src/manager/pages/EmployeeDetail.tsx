@@ -14,6 +14,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { logService } from '../services/logService';
 import { settingsService } from '../services/settingsService';
 import { documentService } from '../services/documentService';
+import { track } from '../../lib/demoTracking';
 import type { EmployeeDocument } from '../services/documentService';
 import { Download, Upload, File as FileIcon, Eye } from 'lucide-react';
 import type { Employee, Shift, Absence } from '../types';
@@ -2890,6 +2891,7 @@ const EmployeeDetail = () => {
                         finalTitle, 
                         uploadDocType === 'nomina' ? uploadDocPeriod : undefined
                       );
+                      track('document_uploaded', { type: uploadDocType });
                       if (profile && employee) {
                         const empName = employee.full_name || employee.name || 'Empleado';
                         const actionType = uploadDocType === 'nomina' ? 'payroll_added' : uploadDocType === 'contrato' ? 'contract_added' : 'document_added';

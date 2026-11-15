@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { absenceService } from '../services/absenceService';
 import { employeeService } from '../services/employeeService';
 import { settingsService } from '../services/settingsService';
+import { track } from '../../lib/demoTracking';
 import type { Absence, Employee } from '../types';
 import type { LeavePolicy } from '../services/settingsService';
 import { CalendarOff, User, Check, X, Clock, CalendarDays, Loader2, Undo, Plus, Palmtree, Stethoscope, FileDown, Activity } from 'lucide-react';
@@ -80,6 +81,7 @@ export default function Leaves() {
   const handleUpdateStatus = async (id: string, status: 'approved' | 'rejected' | 'pending') => {
     try {
       await absenceService.updateAbsenceStatus(id, status);
+      if (status !== 'pending') track('absence_approved', { status });
       setAbsences(absences.map(a => a.id === id ? { ...a, status } : a));
     } catch (err) {
       console.error(err);

@@ -3,6 +3,7 @@ import { Upload, FileText, CheckCircle2, XCircle, AlertTriangle, Loader2, X, Eye
 import { motion, AnimatePresence } from 'framer-motion';
 import { employeeService } from '../services/employeeService';
 import { documentService } from '../services/documentService';
+import { track } from '../../lib/demoTracking';
 import { CustomSelect } from '../components/ui/CustomSelect';
 import { useAuth } from '../contexts/AuthContext';
 import type { Employee } from '../types';
@@ -98,6 +99,7 @@ const BulkNominas = () => {
     const period = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}`;
     const title = `Nómina ${MONTHS[selectedMonth]} ${selectedYear}`;
     setUploading(true);
+    let uploaded = 0;
 
     for (let i = 0; i < matches.length; i++) {
       const m = matches[i];
@@ -111,6 +113,7 @@ const BulkNominas = () => {
         await documentService.uploadDocument(
           m.file, activeCompany.id, m.employee.id, 'nomina', title, period
         );
+        uploaded++;
         setMatches(prev => prev.map((item, idx) =>
           idx === i ? { ...item, status: 'done' } : item
         ));
@@ -121,6 +124,7 @@ const BulkNominas = () => {
       }
     }
 
+    if (uploaded > 0) track('document_uploaded', { type: 'nomina', count: uploaded });
     setUploading(false);
   };
 

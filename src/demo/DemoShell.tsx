@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
+import { track } from '../lib/demoTracking';
 import {
   LayoutDashboard, Monitor, Smartphone, Building2,
   Users, Clock, CalendarOff, ChevronRight, Loader2,
@@ -9,11 +10,6 @@ import ScreenshotTool from './ScreenshotTool';
 
 const DEMO_COMPANY_ID  = import.meta.env.VITE_DEMO_COMPANY_ID || '';
 
-function trackSection(sectionId: string) {
-  const email = localStorage.getItem('fycheo_demo_access');
-  if (!email) return;
-  supabase.from('demo_events').insert({ email, section: sectionId });
-}
 // Cuenta del administrador demo: el Panel Manager y el Kiosko entran con ella.
 // La contraseña la fija la semilla (demo_seed) y llega solo por variable de
 // entorno; si falta, la demo muestra un error en vez de intentar el login.
@@ -234,7 +230,7 @@ export default function DemoShell() {
         }
 
         setReady(true);
-        trackSection(isFullscreen ? fsSection : 'manager');
+        track(isFullscreen ? fsSection : 'manager');
       } catch (e) {
         console.error('Demo boot error:', e);
         const msg = e instanceof Error ? e.message : String(e);
@@ -284,7 +280,7 @@ export default function DemoShell() {
     }
     setActive(id);
     setIframeKey(k => k + 1);
-    trackSection(id);
+    track(id);
   };
 
   useEffect(() => {

@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { CustomSelect } from '../components/ui/CustomSelect';
 import { exportService } from '../services/exportService';
 import { supabase } from '../services/supabase';
+import { track } from '../../lib/demoTracking';
 import { pdfjs, Document, Page } from 'react-pdf';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
@@ -31,6 +32,9 @@ export default function Export() {
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+
+  // Seguimiento de la demo: el visitante ha abierto los informes
+  useEffect(() => { track('reports_open'); }, []);
 
   // Column definitions based on type
   const columnConfigs: Record<string, string[]> = {

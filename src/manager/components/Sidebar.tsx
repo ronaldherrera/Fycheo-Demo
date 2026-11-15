@@ -7,6 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { shiftService } from '../services/shiftService';
 import { notificationService } from '../services/notificationService';
 import { logService } from '../services/logService';
+import { track } from '../../lib/demoTracking';
 
 
 interface SidebarProps {
@@ -98,6 +99,7 @@ const Sidebar = ({ isOpen = true, setIsOpen, isMobile = false }: SidebarProps) =
       const deletedShiftIds = shiftsToDelete.map(s => s.id);
       
       await shiftService.publishShifts(shiftIds, deletedShiftIds, managerName);
+      track('shift_published', { count: data.length });
       
       // Publicar todos los logs provisionales de la empresa
       await supabase

@@ -9,6 +9,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../services/supabase';
+import { track } from '../../lib/demoTracking';
 import { useAuth } from '../contexts/AuthContext';
 import { User, Send, ChevronLeft, RefreshCw, MessageCircle, Trash2 } from 'lucide-react';
 
@@ -216,6 +217,7 @@ export default function ChatPanel({ isOpen, onClose, onUnreadChange }: ChatPanel
         .single();
 
       if (error) throw error;
+      track('chat_message', { app: 'manager' });
       if (data) setMessages(prev => [...prev, data]);
     } catch (e) {
       console.error('Error enviando mensaje:', e);

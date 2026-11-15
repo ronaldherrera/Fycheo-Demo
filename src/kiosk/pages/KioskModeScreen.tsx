@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { adjustDataToCurrentDate, adjustDateString, deAdjustISOString, deAdjustDateString } from '../../lib/date-adjuster';
+import { track } from '../../lib/demoTracking';
 import { Clock, LogOut, CheckCircle2, AlertCircle, Loader2, Fingerprint } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -1070,6 +1071,7 @@ export default function KioskModeScreen() {
         });
 
       if (error) throw error;
+      track('kiosk_clock_in', { type });
 
       // Show success modal
       setSuccessMessage({ type: type, time: localTime });
@@ -1123,6 +1125,7 @@ export default function KioskModeScreen() {
         });
         
       if (insertError) throw insertError;
+      track('kiosk_clock_in', { type: manualEntryType, manual: true });
       
       setShowManualModal(false);
       setManualContextText("");

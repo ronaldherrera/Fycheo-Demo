@@ -34,6 +34,7 @@ import DemoGate from './demo/DemoGate';
 import ManagerRouter from './manager/ManagerRouter';
 import KioskRouter from './kiosk/KioskRouter';
 import EmployeeApp from './employee/EmployeeApp';
+import { startHeartbeat } from './lib/demoTracking';
 import { Monitor } from 'lucide-react';
 
 const DESKTOP_BREAKPOINT = 1024;
@@ -68,6 +69,10 @@ function App() {
     mq.addEventListener('change', handler);
     return () => mq.removeEventListener('change', handler);
   }, [inIframe]);
+
+  // Seguimiento de la demo: un latido por ventana mientras el visitante siga dentro.
+  // Todas las rutas (/, /manager, /kiosk, /employee) comparten esta raíz.
+  useEffect(() => startHeartbeat(), []);
 
   const path = typeof window !== 'undefined' ? window.location.pathname : '/';
 

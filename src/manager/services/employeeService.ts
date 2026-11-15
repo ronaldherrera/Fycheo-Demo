@@ -1,5 +1,6 @@
 import { adjustDataToCurrentDate, deAdjustISOString } from '../../lib/date-adjuster';
 import { supabase } from './supabase';
+import { track } from '../../lib/demoTracking';
 import type { Employee } from '../types';
 
 /** Fila de la importación CSV (ver ImportEmployeesModal). */
@@ -66,6 +67,7 @@ export const employeeService = {
       throw new Error(error.message || 'Error al añadir al empleado.');
     }
 
+    track('employee_added');
     return data as string;
   },
 
@@ -272,8 +274,10 @@ export const employeeService = {
       }
     }
 
+    const created = employeesData.length - failures.length;
+    if (created > 0) track('employee_added', { count: created });
+
     if (failures.length > 0) {
-      const created = employeesData.length - failures.length;
       throw new Error(
         `Se han creado ${created} de ${employeesData.length} empleados. Errores: ${failures.join(' · ')}`
       );

@@ -10,6 +10,7 @@
 import React, { useState, useEffect, useRef, useCallback, useContext } from 'react';
 import { Clock, Check, CheckCheck } from 'lucide-react';
 import { supabase } from '../services/supabase';
+import { track } from '../../lib/demoTracking';
 import { deAdjustISOString, adjustDataToCurrentDate } from '../../lib/date-adjuster';
 import { AppContext } from '../EmployeeApp';
 import { DEFAULT_AVATAR } from '../constants';
@@ -340,6 +341,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ companyId, onUnreadChange, onClos
         .single();
 
       if (error) throw error;
+      track('chat_message', { app: 'employee' });
       if (data) {
         // Reemplaza el temporal por el mensaje real → reloj pasa a check
         setMessages(prev => prev.map(m => m.id === tempId ? data : m));
