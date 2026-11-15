@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { User, Shield, CreditCard, Building2, Check } from 'lucide-react';
+import { planFamily, planLabel } from '../lib/plans';
 
 const plans = [
     {
@@ -40,6 +41,8 @@ const plans = [
 const Account = () => {
     const { user, profile, activeCompany } = useAuth();
     const [currentPlan, setCurrentPlan] = useState(activeCompany?.plan || profile?.plan_selected || 'free');
+    // En producción el plan Pro va por tramos (pro15, pro30...); las tarjetas usan la familia ('pro')
+    const currentFamily = planFamily(currentPlan);
 
     const handlePlanChange = (planId: string) => {
         // Aquí iría la lógica real de cambio de plan (Stripe, etc.)
@@ -89,7 +92,7 @@ const Account = () => {
                 
                 <div className="mb-8">
                      <p className="text-slate-400">
-                        Actualmente estás en el plan: <span className="font-bold text-primary uppercase">{currentPlan === 'free' ? 'Gratuito / Sin Plan' : currentPlan}</span>
+                        Actualmente estás en el plan: <span className="font-bold text-primary">{planLabel(currentPlan, { withLimit: true })}</span>
                     </p>
                 </div>
 
@@ -98,7 +101,7 @@ const Account = () => {
                         <div 
                             key={plan.id} 
                             className={`relative rounded-xl border p-6 flex flex-col transition-all duration-200 ${
-                                currentPlan === plan.id 
+                                currentFamily === plan.id 
                                     ? 'border-primary bg-primary/10 ring-1 ring-primary' 
                                     : 'border-white/5 bg-white/5 hover:border-primary/50 hover:shadow-glow-sm'
                             }`}
@@ -128,14 +131,14 @@ const Account = () => {
 
                             <button
                                 onClick={() => handlePlanChange(plan.id)}
-                                disabled={currentPlan === plan.id}
+                                disabled={currentFamily === plan.id}
                                 className={`w-full py-2.5 rounded-lg font-medium transition-colors ${
-                                    currentPlan === plan.id
+                                    currentFamily === plan.id
                                         ? 'bg-white/10 text-slate-400 cursor-default'
                                         : 'bg-primary text-white hover:bg-primary-dark shadow-sm hover:shadow-glow-sm'
                                 }`}
                             >
-                                {currentPlan === plan.id ? 'Plan Actual' : (plan.price === 'Contactar' ? 'Contactar' : 'Contratar')}
+                                {currentFamily === plan.id ? 'Plan Actual' : (plan.price === 'Contactar' ? 'Contactar' : 'Contratar')}
                             </button>
                         </div>
                     ))}

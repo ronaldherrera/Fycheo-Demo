@@ -2,6 +2,17 @@ import { adjustDataToCurrentDate, deAdjustISOString } from '../../lib/date-adjus
 import { supabase } from './supabase';
 import type { Employee } from '../types';
 
+/** Fila de la importación CSV (ver ImportEmployeesModal). */
+export interface ImportedEmployee {
+  name: string;
+  email: string;
+  phone?: string;
+  role?: string;
+  dni_nie?: string;
+  ss_number?: string;
+  team_id?: string | null;
+}
+
 export const employeeService = {
   async getEmployees(companyId: string) {
     if (!companyId) return [];
@@ -32,48 +43,30 @@ export const employeeService = {
     })) as Employee[];
   },
 
-  async searchUserByEmail(email: string) {
-    // Buscar en la tabla profiles por email
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id, full_name, email, avatar')
-      .eq('email', email.trim())
-      .maybeSingle();
+  /**
+   * Alta de un empleado desde el modal "Añadir a la Organización" (Teams).
+   *
+   * Antes buscaba en `profiles` a cualquier usuario de la plataforma por su email y
+   * lo vinculaba con un insert en company_members; en producción eso permitiría
+   * meter a un usuario real en la empresa demo. Ahora pasa por `demo_add_employee`,
+   * que crea el usuario de Auth, su perfil y su fila en company_members
+   * (accepted = true) dentro de la empresa del administrador autenticado.
+   * Devuelve el id del perfil creado.
+   */
+  async addEmployee(input: { fullName: string; email: string; teamId?: string | null; role?: string }) {
+    const { data, error } = await supabase.rpc('demo_add_employee', {
+      p_full_name: input.fullName,
+      p_email: input.email,
+      p_team_id: input.teamId || null,
+      p_role: input.role || 'employee',
+    });
 
     if (error) {
-        console.error("Error searching user:", error);
-        throw new Error("Error al buscar el usuario.");
+      console.error('Error creando al empleado:', error);
+      throw new Error(error.message || 'Error al añadir al empleado.');
     }
 
-    return data; // Retorna null si no lo encuentra o los datos si lo encuentra
-  },
-
-  async linkUserToCompany(userId: string, companyId: string, role: string, teamId?: string) {
-    // Primero, verificar si ya está en la empresa
-    const { data: existing } = await supabase
-        .from('company_members')
-        .select('user_id')
-        .eq('user_id', userId)
-        .eq('company_id', companyId)
-        .maybeSingle();
-
-    if (existing) {
-        throw new Error("Este usuario ya pertenece a la organización.");
-    }
-
-    // Añadir a company_members como invitación pendiente (accepted: false)
-    const { error } = await supabase
-      .from('company_members')
-      .insert({
-        user_id: userId,
-        company_id: companyId,
-        role: role,
-        team_id: teamId || null,
-        accepted: false
-      });
-
-    if (error) throw error;
-    return true;
+    return data as string;
   },
 
   async unlinkUserFromCompany(userId: string, companyId: string) {
@@ -244,17 +237,46 @@ export const employeeService = {
     return [];
   },
 
-  async importEmployeesBulk(employeesData: any[], companyId: string) {
+  /**
+   * Alta de empleados en bloque (importación CSV).
+   *
+   * En producción esto lo hace la Edge Function `invite-employees`, que envía
+   * correos reales y para la empresa demo responde 403. La demo usa en su lugar
+   * la función de base de datos `demo_add_employee`, que crea el usuario de Auth,
+   * su perfil y su fila en company_members (accepted = true) sin enviar nada.
+   * La empresa la deduce del administrador autenticado, por eso aquí no se pasa.
+   *
+   * Resuelve a true si todos se han creado; si alguno falla, lanza un Error con
+   * el resumen (es lo que espera ImportEmployeesModal: resolver o lanzar).
+   */
+  async importEmployeesBulk(employeesData: ImportedEmployee[], _companyId: string) {
     if (!employeesData || employeesData.length === 0) return;
 
-    // Llamamos a la Edge Function
-    const { data, error } = await supabase.functions.invoke('invite-employees', {
-      body: { employees: employeesData, companyId: companyId }
-    });
+    const failures: string[] = [];
 
-    if (error) {
-      console.error('Error importing employees via Edge Function:', error);
-      throw new Error(error.message || 'Error al importar empleados e invitarlos.');
+    // En serie: cada llamada crea un usuario de Auth y no conviene lanzarlas a la vez
+    for (const emp of employeesData) {
+      const { error } = await supabase.rpc('demo_add_employee', {
+        p_full_name: emp.name,
+        p_email: emp.email,
+        p_phone: emp.phone || null,
+        p_dni_nie: emp.dni_nie || null,
+        p_ss_number: emp.ss_number || null,
+        p_team_id: emp.team_id || null,
+        p_role: emp.role || 'employee',
+      });
+
+      if (error) {
+        console.error(`Error creando al empleado ${emp.email}:`, error);
+        failures.push(`${emp.email}: ${error.message}`);
+      }
+    }
+
+    if (failures.length > 0) {
+      const created = employeesData.length - failures.length;
+      throw new Error(
+        `Se han creado ${created} de ${employeesData.length} empleados. Errores: ${failures.join(' · ')}`
+      );
     }
 
     return true;

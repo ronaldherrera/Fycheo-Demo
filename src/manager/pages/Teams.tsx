@@ -191,30 +191,20 @@ const Teams = () => {
       setAddSuccess(null);
 
       try {
-          const user = await employeeService.searchUserByEmail(addEmail);
-          if (!user) throw new Error("El usuario no está registrado en la App de Fycheo. Pídele que se registre primero.");
-          
-          // 1. Vincular a la empresa (si ya pertenece, solo actualizamos el equipo)
-          try {
-            await employeeService.linkUserToCompany(user.id, activeCompany.id, addRole, selectedTeamForAdd);
-          } catch (linkErr: any) {
-            if (linkErr.message?.includes('ya pertenece')) {
-              await employeeService.updateEmployee(user.id, activeCompany.id, { team_id: selectedTeamForAdd });
-            } else {
-              throw linkErr;
-            }
-          }
-          
-          // 2. Sincronizar el nombre si el administrador lo rellenó
-          if (addName.trim()) {
-              try {
-                  await employeeService.updateEmployeeProfileName(user.id, addName.trim());
-              } catch (updateErr) {
-                  console.error("Error al actualizar el nombre del perfil del empleado:", updateErr);
-              }
-          }
-          
-          setAddSuccess(`${addName.trim() || user.full_name || user.email} ha sido añadido con éxito.`);
+          const email = addEmail.trim();
+          // Sin nombre, se usa la parte local del email (ana.lopez@… → ana.lopez)
+          const fullName = addName.trim() || email.split('@')[0];
+
+          // Crea el usuario, su perfil y su vínculo con la empresa en una sola llamada
+          // (demo_add_employee). Ya no se buscan usuarios reales de la plataforma.
+          await employeeService.addEmployee({
+              fullName,
+              email,
+              teamId: selectedTeamForAdd,
+              role: addRole,
+          });
+
+          setAddSuccess(`${fullName} ha sido añadido con éxito.`);
           await loadData();
           setTimeout(() => setIsMemberModalOpen(false), 2000);
       } catch (err: any) {
@@ -1114,8 +1104,8 @@ const Teams = () => {
                     <div className="p-6">
                         <div className="flex justify-between items-start mb-6">
                             <div>
-                                <h3 className="text-xl font-bold text-white">Vincular a la Organización</h3>
-                                <p className="text-sm text-slate-400 mt-1">Busca a un usuario que ya esté registrado en la App de Fycheo.</p>
+                                <h3 className="text-xl font-bold text-white">Añadir a la Organización</h3>
+                                <p className="text-sm text-slate-400 mt-1">Crea el empleado y añádelo a este equipo. En la demo no se envía ninguna invitación.</p>
                             </div>
                             <button onClick={() => setIsMemberModalOpen(false)} className="p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors">
                                 <X size={20} />
@@ -1187,7 +1177,7 @@ const Teams = () => {
                                     disabled={isAdding || !!addSuccess}
                                     className="w-full bg-primary hover:bg-blue-600 text-white font-semibold py-3 rounded-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                                 >
-                                    {isAdding ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : 'Buscar y Añadir'}
+                                    {isAdding ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : 'Añadir'}
                                 </button>
                             </div>
                         </form>

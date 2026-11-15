@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { cn } from '../lib/utils';
 import type { Company } from '../types';
+import { planLabel } from '../lib/plans';
 
 export const CompaniesHub = () => {
   const navigate = useNavigate();
@@ -120,7 +121,7 @@ export const CompaniesHub = () => {
                                             {company.role === 'owner' ? 'Propietario' : 'Miembro'}
                                         </span>
                                         <span className="text-xs font-semibold px-2.5 py-1 bg-white/5 text-slate-400 border border-white/10 rounded-md">
-                                            Plan {company.plan}
+                                            Plan {planLabel(company.plan)}
                                         </span>
                                     </div>
                                 </div>

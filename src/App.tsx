@@ -34,10 +34,7 @@ import DemoGate from './demo/DemoGate';
 import ManagerRouter from './manager/ManagerRouter';
 import KioskRouter from './kiosk/KioskRouter';
 import EmployeeApp from './employee/EmployeeApp';
-import AdminPanel from './admin/AdminPanel';
 import { Monitor } from 'lucide-react';
-
-const ADMIN_PATH = '/fyadmin';
 
 const DESKTOP_BREAKPOINT = 1024;
 
@@ -73,8 +70,6 @@ function App() {
   }, [inIframe]);
 
   const path = typeof window !== 'undefined' ? window.location.pathname : '/';
-
-  if (path === ADMIN_PATH) return <ErrorBoundary><AdminPanel /></ErrorBoundary>;
 
   if (isMobile) return <MobileBlock />;
 

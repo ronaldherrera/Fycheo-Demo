@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import {
   LayoutDashboard, Monitor, Smartphone, Building2,
   Users, Clock, CalendarOff, ChevronRight, Loader2,
-  BarChart2, RefreshCw, Maximize2
+  BarChart2, RefreshCw, Maximize2, AlertCircle
 } from 'lucide-react';
 import ScreenshotTool from './ScreenshotTool';
 
@@ -14,17 +14,17 @@ function trackSection(sectionId: string) {
   if (!email) return;
   supabase.from('demo_events').insert({ email, section: sectionId });
 }
+// Cuenta del administrador demo: el Panel Manager y el Kiosko entran con ella.
+// La contraseña la fija la semilla (demo_seed) y llega solo por variable de
+// entorno; si falta, la demo muestra un error en vez de intentar el login.
 const ADMIN_EMAIL      = import.meta.env.VITE_DEMO_ADMIN_EMAIL    || 'demo.admin@fycheo-demo.com';
-const ADMIN_PASS       = import.meta.env.VITE_DEMO_ADMIN_PASSWORD || 'FycheoDemo2024!';
-const EMPLOYEE_EMAIL   = 'empleado.demo@fycheo-demo.com';
-const EMPLOYEE_PASS    = 'FycheoDemo2024!';
+const ADMIN_PASS       = import.meta.env.VITE_DEMO_ADMIN_PASSWORD || '';
+const MISSING_PASSWORD_MSG =
+  'Falta la variable VITE_DEMO_ADMIN_PASSWORD: la demo no puede iniciar sesión. Revisa el archivo .env (ver .env.example).';
 
-// Credenciales por sección — admin para manager/kiosk, empleado para employee app
-const SECTION_CREDS: Record<string, { email: string; password: string }> = {
-  manager:  { email: ADMIN_EMAIL,    password: ADMIN_PASS },
-  kiosk:    { email: ADMIN_EMAIL,    password: ADMIN_PASS },
-  employee: { email: EMPLOYEE_EMAIL, password: EMPLOYEE_PASS },
-};
+// Empleado de pruebas (Pedro Jiménez). La sección de empleado se identifica por
+// su perfil (demo_employee_override), sin iniciar sesión con él.
+const EMPLOYEE_EMAIL   = 'empleado.demo@fycheo-demo.com';
 
 type SectionId = 'manager' | 'kiosk' | 'employee';
 
@@ -161,6 +161,7 @@ export default function DemoShell() {
   const [booting, setBooting]     = useState(true);
   const [iframeKey, setIframeKey] = useState(0);
   const [kioskDni, setKioskDni]   = useState<string | null>(null);
+  const [bootError, setBootError] = useState<string | null>(null);
 
   // Medición del contenedor fullscreen para calcular escala "contain"
   const fsCtnRef = useRef<HTMLDivElement>(null);
@@ -182,6 +183,11 @@ export default function DemoShell() {
   useEffect(() => {
     const boot = async () => {
       try {
+        if (!ADMIN_PASS) {
+          setBootError(MISSING_PASSWORD_MSG);
+          return;
+        }
+
         const { data: { session } } = await supabase.auth.getSession();
         let uid = session?.user?.id;
 
@@ -211,7 +217,7 @@ export default function DemoShell() {
           const { data: profile } = await supabase
             .from('profiles')
             .select('id, full_name, email, avatar, dni_nie')
-            .eq('email', 'empleado.demo@fycheo-demo.com')
+            .eq('email', EMPLOYEE_EMAIL)
             .maybeSingle();
 
           if (profile) {
@@ -231,6 +237,8 @@ export default function DemoShell() {
         trackSection(isFullscreen ? fsSection : 'manager');
       } catch (e) {
         console.error('Demo boot error:', e);
+        const msg = e instanceof Error ? e.message : String(e);
+        setBootError(`No se ha podido iniciar la sesión de la demo: ${msg}`);
       } finally {
         setBooting(false);
       }
@@ -261,7 +269,7 @@ export default function DemoShell() {
       const { data: profile } = await supabase
         .from('profiles')
         .select('id, full_name, email, avatar')
-        .eq('email', 'empleado.demo@fycheo-demo.com')
+        .eq('email', EMPLOYEE_EMAIL)
         .maybeSingle();
 
       if (profile) {
@@ -284,7 +292,7 @@ export default function DemoShell() {
     supabase
       .from('profiles')
       .select('dni_nie')
-      .eq('email', 'empleado.demo@fycheo-demo.com')
+      .eq('email', EMPLOYEE_EMAIL)
       .maybeSingle()
       .then(({ data: profile }) => {
         if (profile?.dni_nie) {
@@ -317,6 +325,28 @@ export default function DemoShell() {
   const handleFullscreen = () => {
     window.open(`${window.location.origin}/?fs=1&section=${active}`, '_blank');
   };
+
+  // Sin contraseña configurada o con el login fallido no hay nada que mostrar:
+  // mejor un mensaje claro que un iframe cargando para siempre.
+  if (bootError) {
+    return (
+      <div className="h-screen bg-[#080C14] text-white flex items-center justify-center p-6">
+        <div className="max-w-md w-full bg-[#0C1020] border border-red-500/20 rounded-3xl p-8 text-center">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-red-500/10 border border-red-500/20 mb-5">
+            <AlertCircle size={26} className="text-red-400" />
+          </div>
+          <h1 className="text-xl font-bold mb-2">La demo no ha podido arrancar</h1>
+          <p className="text-sm text-slate-400 leading-relaxed">{bootError}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-6 inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-sm text-white px-4 py-2 rounded-xl transition-colors"
+          >
+            <RefreshCw size={14} /> Reintentar
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (isFullscreen) {
     // Dimensiones nativas de cada dispositivo (iframe + chrome del frame)

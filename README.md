@@ -2,9 +2,9 @@
 
 **SaaS de control horario y gestión de equipos para empresas españolas.** Fichaje con geolocalización, turnos, ausencias, documentos, chat interno, avisos e informes, con el registro horario obligatorio cubierto (conservación durante 4 años).
 
-🌐 **[fycheo.es](https://fycheo.es)**
+🌐 **[fycheo.es](https://fycheo.es)** · 🧪 **[demo.fycheo.es](https://demo.fycheo.es)**
 
-Este repositorio es la **versión de demostración**: una empresa ficticia, «Distribuciones Martínez S.A.», con 12 meses de historial, sobre un proyecto de Supabase separado del de producción y con el mismo esquema. El código de producción es privado y lo enseño en entrevista si hace falta.
+Este repositorio es la **versión de demostración**: una empresa ficticia, «Distribuciones Martínez S.A.», con 24 empleados y 12 meses de historial. Corre sobre la **misma base de datos de producción** de Fycheo, como una empresa más marcada con `is_demo`, aislada del resto por RLS, con reinicio automático cada noche y sin acceso a pagos ni a envío de correos. El código de producción es privado y lo enseño en entrevista si hace falta.
 
 <!-- Añadir aquí capturas: panel de gestión, app del empleado y modo quiosco -->
 <!-- ![Fycheo](docs/capturas/panel.png) -->
@@ -56,8 +56,13 @@ flowchart LR
 ## Esta demo
 
 - React 19 + TypeScript + Vite + Tailwind CSS 4.
-- `seed/`: scripts SQL que crean la empresa ficticia, sus equipos, empleados, turnos, fichajes, ausencias y registros de actividad de 12 meses.
-- `SETUP.md`: cómo montar tu propia copia sobre un proyecto de Supabase vacío.
+- **Misma base de datos que producción.** La empresa demo es una fila más de `companies`, con `is_demo = true`. Las políticas RLS hacen que su administrador solo vea sus propios datos, exactamente igual que cualquier empresa cliente: no hay un esquema ni un proyecto aparte que mantener sincronizado.
+- **Reinicio nocturno.** Cada noche la empresa vuelve a su estado inicial, así que quien la visita puede tocar lo que quiera: crear turnos, aprobar ausencias, importar empleados por CSV…
+- **Sin efectos secundarios.** Las Edge Functions de pagos (Stripe), correo e invitaciones responden 403 para la empresa demo. El alta de empleados pasa por una función de base de datos propia (`demo_add_employee`) que crea el usuario, su perfil y su vínculo con la empresa sin enviar nada.
+- **Acceso por invitación.** La puerta de entrada comprueba el email contra la lista de invitados mediante una RPC (`demo_check_access`) que solo responde sí o no; la lista en sí no es legible desde el navegador.
+- **Historial siempre reciente.** Las fechas de los datos se desplazan al día actual en el cliente (`src/lib/date-adjuster.ts`) respetando el día de la semana, para que los fines de semana sigan cayendo en sábado y domingo.
+- `seed/`: scripts SQL con los que se generó originalmente la empresa ficticia (equipos, empleados, turnos, fichajes, ausencias y registros de 12 meses). Se conservan como referencia; en producción la empresa la crea y la reinicia el equipo de Fycheo.
+- `SETUP.md`: cómo ejecutar la demo en local.
 
 ---
 

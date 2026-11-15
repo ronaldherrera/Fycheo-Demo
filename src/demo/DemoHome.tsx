@@ -2,16 +2,13 @@ import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Loader2, ArrowRight, Building2, Users, Clock, CalendarOff, BarChart2, Monitor, Smartphone } from 'lucide-react';
 
-const DEMO_ACCOUNTS = {
-  admin: {
-    email: import.meta.env.VITE_DEMO_ADMIN_EMAIL || 'demo.admin@fycheo-demo.com',
-    password: import.meta.env.VITE_DEMO_ADMIN_PASSWORD || 'FycheoDemo2024!',
-  },
-  kiosk: {
-    email: import.meta.env.VITE_DEMO_ADMIN_EMAIL || 'demo.admin@fycheo-demo.com',
-    password: import.meta.env.VITE_DEMO_ADMIN_PASSWORD || 'FycheoDemo2024!',
-  },
-};
+// Cuenta del administrador demo: Manager y Kiosko entran con ella.
+// La contraseña la fija la semilla (demo_seed) y llega solo por variable de
+// entorno: no hay ningún valor por defecto en el código.
+const ADMIN_EMAIL    = import.meta.env.VITE_DEMO_ADMIN_EMAIL || 'demo.admin@fycheo-demo.com';
+const ADMIN_PASSWORD = import.meta.env.VITE_DEMO_ADMIN_PASSWORD || '';
+const MISSING_PASSWORD_MSG =
+  'Falta la variable VITE_DEMO_ADMIN_PASSWORD: la demo no puede iniciar sesión. Revisa el archivo .env (ver .env.example).';
 
 const DEMO_COMPANY_ID = import.meta.env.VITE_DEMO_COMPANY_ID || '';
 
@@ -28,9 +25,13 @@ export default function DemoHome() {
     setLoading(type);
     setError('');
     try {
+      if (!ADMIN_PASSWORD) throw new Error(MISSING_PASSWORD_MSG);
+
       await supabase.auth.signOut();
-      const account = type === 'manager' ? DEMO_ACCOUNTS.admin : DEMO_ACCOUNTS.kiosk;
-      const { data, error: loginError } = await supabase.auth.signInWithPassword(account);
+      const { data, error: loginError } = await supabase.auth.signInWithPassword({
+        email: ADMIN_EMAIL,
+        password: ADMIN_PASSWORD,
+      });
       if (loginError) throw loginError;
       if (!data.user) throw new Error('No se pudo autenticar');
 

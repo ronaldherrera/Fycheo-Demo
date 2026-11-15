@@ -19,6 +19,17 @@ async function trackVisit(email: string) {
   });
 }
 
+/**
+ * Comprueba si un email está invitado a la demo.
+ * La tabla demo_access ya no es legible con la clave anon: se consulta a través
+ * de la RPC demo_check_access, que solo devuelve true/false.
+ */
+async function checkAccess(email: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc('demo_check_access', { p_email: email });
+  if (error) throw error;
+  return data === true;
+}
+
 interface Props {
   children: React.ReactNode;
 }
@@ -30,24 +41,22 @@ export default function DemoGate({ children }: Props) {
 
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      // Verificar que el email guardado sigue siendo válido
-      supabase
-        .from('demo_access')
-        .select('email')
-        .eq('email', saved)
-        .maybeSingle()
-        .then(({ data }) => {
-          if (data) {
-            trackVisit(saved);
-            setStatus('granted');
-          } else {
-            setStatus('gate');
-          }
-        });
-    } else {
+    if (!saved) {
       setStatus('gate');
+      return;
     }
+    // Verificar que el email guardado sigue estando invitado
+    checkAccess(saved)
+      .then(ok => {
+        if (ok) {
+          trackVisit(saved);
+          setStatus('granted');
+        } else {
+          localStorage.removeItem(STORAGE_KEY);
+          setStatus('gate');
+        }
+      })
+      .catch(() => setStatus('gate'));
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -57,19 +66,21 @@ export default function DemoGate({ children }: Props) {
     setStatus('loading');
     setError('');
 
-    const { data } = await supabase
-      .from('demo_access')
-      .select('email, name')
-      .eq('email', email.trim().toLowerCase())
-      .maybeSingle();
+    const cleanEmail = email.trim().toLowerCase();
 
-    if (data) {
-      const cleanEmail = email.trim().toLowerCase();
-      localStorage.setItem(STORAGE_KEY, cleanEmail);
-      trackVisit(cleanEmail);
-      setStatus('granted');
-    } else {
-      setError('Este email no tiene acceso a la demo. Contacta con el equipo de Fycheo.');
+    try {
+      const ok = await checkAccess(cleanEmail);
+      if (ok) {
+        localStorage.setItem(STORAGE_KEY, cleanEmail);
+        trackVisit(cleanEmail);
+        setStatus('granted');
+      } else {
+        setError('Este email no tiene acceso a la demo. Contacta con el equipo de Fycheo.');
+        setStatus('gate');
+      }
+    } catch (err) {
+      console.error('Error comprobando el acceso a la demo:', err);
+      setError('No se ha podido comprobar el acceso. Inténtalo de nuevo en unos segundos.');
       setStatus('gate');
     }
   };
