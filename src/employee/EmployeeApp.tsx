@@ -33,11 +33,9 @@ const App: React.FC = () => {
       const raw = localStorage.getItem('demo_employee_override');
       if (raw) {
         const override = JSON.parse(raw);
-        console.log('[Demo] Applying employee override:', override.id, override.email);
         return { ...baseUser, ...override };
       }
     } catch {}
-    console.log('[Demo] No override, using auth user:', baseUser?.id);
     return baseUser;
   };
 

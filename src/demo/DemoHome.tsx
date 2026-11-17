@@ -92,7 +92,7 @@ export default function DemoHome() {
           {/* Stats */}
           <div className="flex items-center justify-center gap-6 flex-wrap text-sm text-slate-400">
             {[
-              { icon: Users,      label: '24 empleados ficticios' },
+              { icon: Users,      label: '15 empleados ficticios' },
               { icon: Clock,      label: '12 meses de historial' },
               { icon: CalendarOff,label: 'Ausencias y bajas reales' },
               { icon: BarChart2,  label: 'Dashboard en vivo' },

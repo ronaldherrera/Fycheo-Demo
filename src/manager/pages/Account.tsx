@@ -41,7 +41,9 @@ const plans = [
 
 const Account = () => {
     const { user, profile, activeCompany } = useAuth();
-    const [currentPlan, setCurrentPlan] = useState(activeCompany?.plan || profile?.plan_selected || 'free');
+    const currentPlan = activeCompany?.plan || profile?.plan_selected || 'free';
+    // Aviso en pantalla al intentar contratar (la demo no cobra ni cambia de plan)
+    const [planNotice, setPlanNotice] = useState<string | null>(null);
     // En producción el plan Pro va por tramos (pro15, pro30...); las tarjetas usan la familia ('pro')
     const currentFamily = planFamily(currentPlan);
 
@@ -50,9 +52,7 @@ const Account = () => {
         const amount = parseInt(plans.find(p => p.id === planId)?.price ?? '', 10);
         track('topup_attempt', Number.isNaN(amount) ? { plan: planId } : { plan: planId, amount });
 
-        // Aquí iría la lógica real de cambio de plan (Stripe, etc.)
-        alert(`Has seleccionado contratar el plan: ${planId}`);
-        setCurrentPlan(planId);
+        setPlanNotice('En la demo no se pueden contratar planes ni hacer pagos');
     };
 
     return (
@@ -100,6 +100,24 @@ const Account = () => {
                         Actualmente estás en el plan: <span className="font-bold text-primary">{planLabel(currentPlan, { withLimit: true })}</span>
                     </p>
                 </div>
+
+                {planNotice && (
+                    <div
+                        role="status"
+                        aria-live="polite"
+                        className="mb-6 flex items-center justify-between gap-4 rounded-lg border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-200"
+                    >
+                        <span>{planNotice}</span>
+                        <button
+                            type="button"
+                            onClick={() => setPlanNotice(null)}
+                            aria-label="Cerrar aviso"
+                            className="shrink-0 text-amber-200/70 hover:text-amber-100"
+                        >
+                            ×
+                        </button>
+                    </div>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     {plans.map((plan) => (

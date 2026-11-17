@@ -396,7 +396,7 @@ export default function DemoShell() {
                     </div>
                     <div className="flex-1 mx-3 flex items-center gap-2 bg-white/5 rounded-md px-3 py-1.5">
                       <div className="w-2.5 h-2.5 rounded-full border border-white/20 shrink-0" />
-                      <span className="text-xs text-slate-400 truncate">https://www.manager.fycheo.es</span>
+                      <span className="text-xs text-slate-400 truncate">https://manager.fycheo.es</span>
                     </div>
                   </div>
                   <div className="flex-1 min-h-0">
@@ -509,7 +509,7 @@ export default function DemoShell() {
         {/* Stats */}
         <div className="grid grid-cols-2 gap-2 px-4 py-3 border-b border-white/5">
           {[
-            { icon: Users,       label: '24 empleados', color: 'text-blue-400' },
+            { icon: Users,       label: '15 empleados', color: 'text-blue-400' },
             { icon: Clock,       label: '12 meses datos', color: 'text-emerald-400' },
             { icon: CalendarOff, label: '4 equipos', color: 'text-purple-400' },
             { icon: BarChart2,   label: 'Datos ficticios', color: 'text-amber-400' },
@@ -631,7 +631,7 @@ export default function DemoShell() {
                 <div className="flex-1 mx-3 flex items-center gap-2 bg-white/5 rounded-md px-3 py-1.5">
                   <div className="w-2.5 h-2.5 rounded-full border border-white/20 shrink-0" />
                   <span className="text-xs text-slate-400 truncate">
-                    https://www.manager.fycheo.es
+                    https://manager.fycheo.es
                   </span>
                 </div>
               </div>
